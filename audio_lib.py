@@ -17,19 +17,19 @@
     - plays .mp3 and .wav files from a micro SD card
     - line-level or I2S output:
         -- passed as audio_out to play_audio()
-    - edit audio files to fade-in and fade-out to minimise clicks
     - supports mono or stereo, at 22 KHz sample rate
         (or less) and 16-bit WAV format (ref. above)
     - class inheritance is not used (V 7.3.3 bug)
+    Tip:
+    edit audio files to fade-in and fade-out to minimise clicks
 """
 
-# hardware
+# hardware io
 from digitalio import DigitalInOut, Direction, Pull
 
 # audio
 from audiomp3 import MP3Decoder
 from audiocore import WaveFile
-# module is board-dependent
     
 # SD storage
 import busio
@@ -52,13 +52,12 @@ def shuffle(tuple_):
     limit = n - 1
     for i in range(limit):  # exclusive range
         j = randint(i, limit)  # inclusive range
-        if j != i:
-            s_list[i], s_list[j] = s_list[j], s_list[i]
+        s_list[i], s_list[j] = s_list[j], s_list[i]
     return tuple(s_list)
 
 
 def file_ext(name_):
-    """ return lower-case file extension """
+    """ return file extension as lower-case string """
     if name_.rfind('.', 1) > 0:
         ext_ = name_.rsplit('.', 1)[1].lower()
     else:
@@ -67,7 +66,7 @@ def file_ext(name_):
 
 
 def get_audio_filenames(dir_, ext_list=('mp3', 'wav')):
-    """ from folder, return a list of type in ext_list
+    """ from folder, return a tuple of ext_list type files
         - CircuitPython libraries replay .mp3 or .wav files
         - skip system files with first char == '.' """
     return tuple([f for f in os.listdir(dir_)
@@ -78,7 +77,8 @@ class SdReader:
     """ sd card reader, SPI protocol """
 
     def __init__(self, clock, mosi, miso, cs, sd_dir):
-        self.dir = sd_dir + '/'
+        if sd_dir[-1:] != '/':
+            self.dir = sd_dir + '/'
         
         spi = busio.SPI(clock, MOSI=mosi, MISO=miso)
         sd_card = sdcardio.SDCard(spi, cs)
@@ -96,12 +96,12 @@ class Button:
 
     @property
     def is_off(self):
-        """ pull-up logic for button not pressed """
+        """ True if button is not pressed """
         return self._pin_in.value
 
     @property
     def is_on(self):
-        """ pull-up logic for button pressed """
+        """ True if button is pressed """
         return not self._pin_in.value
 
 
