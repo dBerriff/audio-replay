@@ -74,7 +74,8 @@ def get_audio_filenames(dir_, ext_list=('mp3', 'wav')):
     
 
 class SdReader:
-    """ sd card reader, SPI protocol """
+    """ sd card reader, SPI protocol
+    	- mounted as 'sd/' by default """
 
     def __init__(self, clock, mosi, miso, cs, sd_dir='sd/'):
         self._dir = sd_dir
