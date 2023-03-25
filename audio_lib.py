@@ -76,14 +76,18 @@ def get_audio_filenames(dir_, ext_list=('mp3', 'wav')):
 class SdReader:
     """ sd card reader, SPI protocol """
 
-    def __init__(self, clock, mosi, miso, cs, sd_dir):
-        if sd_dir[-1:] != '/':
-            self.dir = sd_dir + '/'
-        
+    def __init__(self, clock, mosi, miso, cs, sd_dir='sd/'):
+        self._dir = sd_dir
         spi = busio.SPI(clock, MOSI=mosi, MISO=miso)
         sd_card = sdcardio.SDCard(spi, cs)
         vfs = storage.VfsFat(sd_card)
         storage.mount(vfs, sd_dir)
+        print(f'SD card reader mounted as: {self.dir}')
+    
+    @property
+    def dir(self):
+        """ returns mounted directory """
+        return self._dir
 
 
 class Button:
