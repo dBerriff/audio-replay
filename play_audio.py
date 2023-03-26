@@ -28,8 +28,9 @@ from audio_lib import Button, PinOut, SdReader, \
      
 
 def main():
-    """ play audio files under button control """
-
+    """ test: play audio files under button control
+        - pins for Cytron Maker Pi Pico """
+    
     # === USER parameters ===
     
     audio_folder = 'audio/'
@@ -43,31 +44,30 @@ def main():
     audio_pin = board.GP18  # Cytron jack socket
     
     # LED: waiting for Play button push
-    # if not used, set: led_pin = None
-    led_pin = PinOut(board.GP0)
+    # onboard LED pin is: GP25 on standard Pico
+    led_pin = PinOut(board.GP25)
 
     # === end USER parameters ===
-
+    
+    # set up the GP pins
+    # buttons
     play_btns = (Button(play_pin_1), Button(play_pin_2))
     skip_btn = Button(skip_pin)
-
-    # sd card pins for Cytron Maker Pi Pico card reader
+    # sd card
     clock = board.GP10
     mosi = board.GP11
     miso = board.GP12
     cs = board.GP15
 
-    # instantiate card reader; mount as "/sd"
-    sd_card = SdReader(clock, mosi, miso, cs)
+    # instantiate card reader; mounts as '/sd/'
+    sd_card = SdReader(clock, mosi, miso, cs, '/sd')
 
     music_filenames = get_audio_filenames(sd_card.dir + audio_folder)
     music_filenames = shuffle(music_filenames)  # optional
     
-    # instantiate audio out
-    audio_out = AudioOut(audio_pin)
     # play music
     play_audio(sd_card.dir, music_filenames,
-               audio_out, play_btns, skip_btn, led_pin)
+               AudioOut(audio_pin), play_btns, skip_btn, led_pin)
 
 
 if __name__ == '__main__':

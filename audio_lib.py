@@ -17,14 +17,12 @@
     - plays .mp3 and .wav files from a micro SD card
     - line-level or I2S output:
         -- passed as audio_out to play_audio()
-    - supports mono or stereo, at 22 KHz sample rate
+    - CircuitPython supports mono or stereo, at 22 KHz sample rate
         (or less) and 16-bit WAV format (ref. above)
     - class inheritance is not used (V 7.3.3 bug)
-    Tip:
-    edit audio files to fade-in and fade-out to minimise clicks
 """
 
-# hardware io
+# hardware
 from digitalio import DigitalInOut, Direction, Pull
 
 # audio
@@ -42,8 +40,8 @@ from random import randint
 import gc  # garbage collection for RAM
 
 
-def shuffle(tuple_):
-    """ return a shuffled copy of a tuple
+def shuffle(tuple_) -> tuple:
+    """ return a shuffled tuple of a tuple (or list)
         - Durstenfeld / Fisher-Yates shuffle algorithm """
     n = len(tuple_)
     if n < 2:
@@ -52,12 +50,13 @@ def shuffle(tuple_):
     limit = n - 1
     for i in range(limit):  # exclusive range
         j = randint(i, limit)  # inclusive range
-        s_list[i], s_list[j] = s_list[j], s_list[i]
+        if j != i:
+            s_list[i], s_list[j] = s_list[j], s_list[i]
     return tuple(s_list)
 
 
-def file_ext(name_):
-    """ return file extension as lower-case string """
+def file_ext(name_) -> str:
+    """ return lower-case file extension """
     if name_.rfind('.', 1) > 0:
         ext_ = name_.rsplit('.', 1)[1].lower()
     else:
@@ -65,8 +64,8 @@ def file_ext(name_):
     return ext_
 
 
-def get_audio_filenames(dir_, ext_list=('mp3', 'wav')):
-    """ from folder, return a tuple of ext_list type files
+def get_audio_filenames(dir_, ext_list=('mp3', 'wav')) -> tuple:
+    """ from folder, return a list of type in ext_list
         - CircuitPython libraries replay .mp3 or .wav files
         - skip system files with first char == '.' """
     return tuple([f for f in os.listdir(dir_)
@@ -74,21 +73,15 @@ def get_audio_filenames(dir_, ext_list=('mp3', 'wav')):
     
 
 class SdReader:
-    """ sd card reader, SPI protocol
-    	- mounted as 'sd/' by default """
+    """ sd card reader, SPI protocol """
 
-    def __init__(self, clock, mosi, miso, cs, sd_dir='sd/'):
-        self._dir = sd_dir
+    def __init__(self, clock, mosi, miso, cs, sd_dir):
+        self.dir = sd_dir + '/'
+        
         spi = busio.SPI(clock, MOSI=mosi, MISO=miso)
         sd_card = sdcardio.SDCard(spi, cs)
         vfs = storage.VfsFat(sd_card)
         storage.mount(vfs, sd_dir)
-        print(f'SD card reader mounted as: {self.dir}')
-    
-    @property
-    def dir(self):
-        """ returns mounted directory """
-        return self._dir
 
 
 class Button:
@@ -100,13 +93,13 @@ class Button:
         self._pin_in.pull = Pull.UP
 
     @property
-    def is_off(self):
-        """ True if button is not pressed """
+    def is_off(self) -> bool:
+        """ pull-up logic for button not pressed """
         return self._pin_in.value
 
     @property
-    def is_on(self):
-        """ True if button is pressed """
+    def is_on(self) -> bool:
+        """ pull-up logic for button pressed """
         return not self._pin_in.value
 
 
@@ -119,66 +112,132 @@ class PinOut:
         self.state = False
         
     @property
-    def state(self):
+    def state(self) -> bool:
         """ pin state """
         return self._pin_out.value
     
     @state.setter
     def state(self, value):
         self._pin_out.value = value
-    
 
-def play_audio(m_dir, files, audio_out,
-               play_btns, skip_btn, wait_led=None):
+
+def play_audio(media_dir, files, audio_out,
+               play_btns, skip_btn, wait_led):
     """ play mp3 and wav files under button control """
+    
+    # helper functions
+    
+    def get_decoder(m_dir, files_):
+        """ return decoder if required else None """
+        decoder_ = None
+        for filename_ in files_:
+            if file_ext(filename_) == 'mp3':
+                # decoder instantiation requires a file
+                audio_file = open(m_dir + filename_, 'rb')
+                decoder_ = MP3Decoder(audio_file)
+                break  # instantiate once only
+        return decoder_
+    
+    def play_file(m_dir, filename_, decoder_, audio_out_):
+        """ play wav or mp3 file """
+        audio_file = open(m_dir + filename_, 'rb')
+        ext = file_ext(filename_)
+        if ext == 'mp3':
+            decoder_.file = audio_file
+            audio_out_.play(decoder_)
+        elif ext == 'wav':
+            wave = WaveFile(audio_file)
+            audio_out_.play(wave)
+        print(f'playing: {filename}')
+
+    def wait_audio_finish(audio_out_, skip_btn_):
+        """ wait for audio to complete or skip_button pressed """
+        while audio_out_.playing:
+            if skip_btn_.is_on:
+                audio_out_.stop()
+    
+    def wait_button_press(play_btns_):
+        """ wait for a button to be pressed """
+        print('Waiting for button press ...')
+        wait = True
+        while wait:
+            for button in play_btns_:
+                if button.is_on:
+                    wait = False
+
+    # play_audio function
 
     off = False
     on = True
 
-    if wait_led:
-        wait_led.state = off
-    mp3_decoder = None
-    # instantiate MP3 decoder if required
-    for filename in files:
-        if file_ext(filename) == 'mp3':
-            audio_file = open(m_dir + filename, 'rb')
-            mp3_decoder = MP3Decoder(audio_file)
-            break  # instantiate once only
-    
+    # instantiate MP3 decoder (None if not required)
+    decoder = get_decoder(media_dir, files)
+    wait_led.state = off    
     list_len = len(files)
     list_index = 0
     while True:
         filename = files[list_index]
-        audio_file = open(m_dir + filename, 'rb')
-        ext = file_ext(filename)
-        if ext == 'mp3':
-            mp3_decoder.file = audio_file
-            audio_out.play(mp3_decoder)
-        elif ext == 'wav':
-            wave = WaveFile(audio_file)
-            audio_out.play(wave)
-        print(f'playing: {filename}')
+        play_file(media_dir, filename, decoder, audio_out)
+        wait_audio_finish(audio_out, skip_btn)
 
-        while audio_out.playing:
-            if skip_btn.is_on:
-                audio_out.stop()
-        print('Waiting for button press ...')
         gc.collect()  # free up memory between plays
-        wait_flag = True
-        if wait_led:
-            wait_led.state = on
-        while wait_flag:
-            for button in play_btns:
-                if button.is_on:
-                    wait_flag = False
-        if wait_led:
-            wait_led.state = off
-        list_index += 1
-        list_index %= list_len
+        wait_led.state = on
+        wait_button_press(play_btns)
+        wait_led.state = off
+        # set index for next file
+        list_index = (list_index + 1) % list_len
 
 
 def main():
-    pass
+    """ test: play audio files under button control
+        - pins for Cytron Maker Pi Pico board """
+    
+    import board
+
+    # AudioOut - line-level audio on a single GP pin
+    # module is board-dependent:
+    try:
+        from audioio import AudioOut
+    except ImportError:
+        from audiopwmio import PWMAudioOut as AudioOut
+
+    # === USER parameters ===
+    
+    audio_folder = 'audio/'
+
+    # button pins
+    play_pin_1 = board.GP20  # public
+    play_pin_2 = board.GP21  # operator
+    skip_pin = board.GP22  # useful for testing
+
+    # audio-out pin (mono)
+    audio_pin = board.GP18  # Cytron jack socket
+    
+    # LED: waiting for Play button push
+    # onboard LED pin is: GP25 on standard Pico
+    led_pin = PinOut(board.GP25)
+
+    # === end USER parameters ===
+    
+    # set up the GP pins
+    # buttons
+    play_btns = (Button(play_pin_1), Button(play_pin_2))
+    skip_btn = Button(skip_pin)
+    # sd card
+    clock = board.GP10
+    mosi = board.GP11
+    miso = board.GP12
+    cs = board.GP15
+
+    # instantiate card reader; mounts as '/sd/'
+    sd_card = SdReader(clock, mosi, miso, cs, '/sd')
+
+    music_filenames = get_audio_filenames(sd_card.dir + audio_folder)
+    music_filenames = shuffle(music_filenames)  # optional
+    
+    # play music
+    play_audio(sd_card.dir, music_filenames,
+               AudioOut(audio_pin), play_btns, skip_btn, led_pin)
 
 
 if __name__ == '__main__':
