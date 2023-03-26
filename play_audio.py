@@ -59,15 +59,19 @@ def main():
     miso = board.GP12
     cs = board.GP15
 
-    # instantiate card reader; mounts as '/sd/'
-    sd_card = SdReader(clock, mosi, miso, cs, '/sd')
+    # instantiate card reader; default mount is '/sd'
+    # default .dir is: '/sd/'
+    sd_card = SdReader(clock, mosi, miso, cs)
+    audio_folder = sd_card.dir + audio_folder
+    print(f'audio folder is: {audio_folder}')
 
-    music_filenames = get_audio_filenames(sd_card.dir + audio_folder)
+    music_filenames = get_audio_filenames(audio_folder)
     music_filenames = shuffle(music_filenames)  # optional
     
     # play music
-    play_audio(sd_card.dir, music_filenames,
-               AudioOut(audio_pin), play_btns, skip_btn, led_pin)
+    play_audio(audio_folder, music_filenames,
+               AudioOut(audio_pin),
+               play_btns, skip_btn, led_pin)
 
 
 if __name__ == '__main__':

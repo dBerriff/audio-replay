@@ -75,9 +75,9 @@ def get_audio_filenames(dir_, ext_list=('mp3', 'wav')) -> tuple:
 class SdReader:
     """ sd card reader, SPI protocol """
 
-    def __init__(self, clock, mosi, miso, cs, sd_dir):
+    def __init__(self, clock, mosi, miso, cs, sd_dir='/sd'):
         self.dir = sd_dir + '/'
-        
+
         spi = busio.SPI(clock, MOSI=mosi, MISO=miso)
         sd_card = sdcardio.SDCard(spi, cs)
         vfs = storage.VfsFat(sd_card)
@@ -122,7 +122,7 @@ class PinOut:
 
 
 def play_audio(media_dir, files, audio_out,
-               play_btns, skip_btn, wait_led):
+               play_buttons, skip_btn, wait_led):
     """ play mp3 and wav files under button control """
     
     # helper functions
@@ -156,12 +156,12 @@ def play_audio(media_dir, files, audio_out,
             if skip_btn_.is_on:
                 audio_out_.stop()
     
-    def wait_button_press(play_btns_):
+    def wait_button_press(play_buttons_):
         """ wait for a button to be pressed """
         print('Waiting for button press ...')
         wait = True
         while wait:
-            for button in play_btns_:
+            for button in play_buttons_:
                 if button.is_on:
                     wait = False
 
@@ -182,7 +182,7 @@ def play_audio(media_dir, files, audio_out,
 
         gc.collect()  # free up memory between plays
         wait_led.state = on
-        wait_button_press(play_btns)
+        wait_button_press(play_buttons)
         wait_led.state = off
         # set index for next file
         list_index = (list_index + 1) % list_len
@@ -221,7 +221,7 @@ def main():
     
     # set up the GP pins
     # buttons
-    play_btns = (Button(play_pin_1), Button(play_pin_2))
+    play_buttons = (Button(play_pin_1), Button(play_pin_2))
     skip_btn = Button(skip_pin)
     # sd card
     clock = board.GP10
@@ -229,15 +229,18 @@ def main():
     miso = board.GP12
     cs = board.GP15
 
-    # instantiate card reader; mounts as '/sd/'
-    sd_card = SdReader(clock, mosi, miso, cs, '/sd')
+    # instantiate card reader; default mount is '/sd'
+    # default .dir is: '/sd/'
+    sd_card = SdReader(clock, mosi, miso, cs)
+    audio_folder = sd_card.dir + audio_folder
+    print(f'audio folder is: {audio_folder}')
 
-    music_filenames = get_audio_filenames(sd_card.dir + audio_folder)
+    music_filenames = get_audio_filenames(audio_folder)
     music_filenames = shuffle(music_filenames)  # optional
     
     # play music
-    play_audio(sd_card.dir, music_filenames,
-               AudioOut(audio_pin), play_btns, skip_btn, led_pin)
+    play_audio(audio_folder, music_filenames,
+               AudioOut(audio_pin), play_buttons, skip_btn, led_pin)
 
 
 if __name__ == '__main__':
