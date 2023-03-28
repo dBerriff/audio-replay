@@ -31,16 +31,15 @@ import busio
 import sdcardio
 import storage
 
+# other
 import os
 import sys
-
-# other
 from random import randint
 import gc  # garbage collection for RAM
 
 
 def shuffle(tuple_) -> tuple:
-    """ return a shuffled tuple of a tuple (or list)
+    """ return a shuffled tuple of a tuple or list
         - Durstenfeld / Fisher-Yates shuffle algorithm """
     n = len(tuple_)
     if n < 2:
@@ -72,7 +71,7 @@ class SdReader:
         try:
             sd_card = sdcardio.SDCard(spi, cs)
         except OSError:
-            print('No SD card')
+            print('No SD card found.')
             sys.exit()
         vfs = storage.VfsFat(sd_card)
         storage.mount(vfs, sd_dir)
@@ -117,19 +116,21 @@ class PinOut:
 
 class AudioPlayer:
     """ play audio files under button control
-        - audio is MP3 or WAV files
-        - plays all audio files in m_dir
-        - audio_channel can be a line or I2S output
+        - audio is an MP3 or WAV file
+        - plays all audio files in: m_dir
+        - audio_channel can be line or I2S output
         - CircuitPython supports mono and stereo audio,
             at 22 KHz sample rate (or less) and
             16-bit WAV format
         See: https://learn.adafruit.com/circuitpython-essentials/
-             circuitpython-audio-out
-        
-        """
-    # for buttons
+             circuitpython-audio-out  
+    """
+
+    # for LED pin
     off = False
     on = True
+
+    ext_list = ('mp3', 'wav')
 
     def __init__(self, m_dir, audio_channel,
                  play_buttons, skip_button, wait_led):
@@ -138,7 +139,6 @@ class AudioPlayer:
         self.play_buttons = play_buttons
         self.skip_button = skip_button
         self.wait_led = wait_led
-        self.ext_list = ('mp3', 'wav')
         self.files = self.get_audio_filenames()
         self.decoder = self._set_decoder()
 
@@ -181,7 +181,7 @@ class AudioPlayer:
         return decoder
 
     def play_audio_file(self, filename):
-        """ play single audio file, wav or mp3 """
+        """ play single audio file """
         try:
             audio_file = open(self.m_dir + filename, 'rb')
         except OSError:
@@ -192,8 +192,7 @@ class AudioPlayer:
             self.decoder.file = audio_file
             self.audio_channel.play(self.decoder)
         elif ext == 'wav':
-            wave = WaveFile(audio_file)
-            self.audio_channel.play(wave)
+            self.audio_channel.play(WaveFile(audio_file))
 
     def play_audio_files(self):
         """ play mp3 and wav files under button control """
@@ -248,7 +247,7 @@ def main():
     play_buttons = (Button(play_pin_1), Button(play_pin_2))
     skip_btn = Button(skip_pin)
     # sd card for Cytron Maker Pi Pico
-    # root sd_card.dir is: '/sd/'
+    # root sd_card directory is: '/sd/'
     sd_card = SdReader(board.GP10,  # clock
                        board.GP11,  # mosi
                        board.GP12,  # miso
