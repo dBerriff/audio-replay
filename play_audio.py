@@ -23,14 +23,22 @@ except ImportError:
     from audiopwmio import PWMAudioOut as AudioOut
 
 # required classes and functions
-from audio_lib import Button, PinOut, SdReader, \
-     get_audio_filenames, play_audio, shuffle
+from audio_lib import Button, PinOut, SdReader, AudioPlayer
      
 
 def main():
     """ test: play audio files under button control
-        - pins for Cytron Maker Pi Pico """
+        - pins for Cytron Maker Pi Pico board """
     
+    import board
+
+    # AudioOut - line-level audio on a single GP pin
+    # module is board-dependent:
+    try:
+        from audioio import AudioOut
+    except ImportError:
+        from audiopwmio import PWMAudioOut as AudioOut
+
     # === USER parameters ===
     
     audio_folder = 'audio/'
@@ -38,40 +46,36 @@ def main():
     # button pins
     play_pin_1 = board.GP20  # public
     play_pin_2 = board.GP21  # operator
-    skip_pin = board.GP22  # useful for testing
+    skip_pin = board.GP22  # useful while testing
 
     # audio-out pin (mono)
     audio_pin = board.GP18  # Cytron jack socket
-    
-    # LED: waiting for Play button push
-    # onboard LED pin is: GP25 on standard Pico
-    led_pin = PinOut(board.GP25)
 
+    # LED: indicates waiting for Play button push
+    # onboard LED pin is: standard Pico: GP25
+    led_pin = PinOut(board.GP25)
+    
     # === end USER parameters ===
     
-    # set up the GP pins
+    # assign the board pins
     # buttons
-    play_btns = (Button(play_pin_1), Button(play_pin_2))
+    play_buttons = (Button(play_pin_1), Button(play_pin_2))
     skip_btn = Button(skip_pin)
-    # sd card
-    clock = board.GP10
-    mosi = board.GP11
-    miso = board.GP12
-    cs = board.GP15
-
-    # instantiate card reader; default mount is '/sd'
-    # default .dir is: '/sd/'
-    sd_card = SdReader(clock, mosi, miso, cs)
+    # sd card for Cytron Maker Pi Pico
+    # root sd_card.dir is: '/sd/'
+    sd_card = SdReader(board.GP10,  # clock
+                       board.GP11,  # mosi
+                       board.GP12,  # miso
+                       board.GP15)  # cs
     audio_folder = sd_card.dir + audio_folder
     print(f'audio folder is: {audio_folder}')
 
-    music_filenames = get_audio_filenames(audio_folder)
-    music_filenames = shuffle(music_filenames)  # optional
-    
-    # play music
-    play_audio(audio_folder, music_filenames,
-               AudioOut(audio_pin),
-               play_btns, skip_btn, led_pin)
+    # for line-level output
+    audio_channel = AudioOut(audio_pin)
+
+    audio_player = AudioPlayer(audio_folder, audio_channel,
+                               play_buttons, skip_btn, led_pin)
+    audio_player.play_audio_list()
 
 
 if __name__ == '__main__':
