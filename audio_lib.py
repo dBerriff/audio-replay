@@ -9,17 +9,14 @@
     See: https://learn.adafruit.com/circuitpython-essentials/
                  circuitpython-audio-out
     Adapted by David Jones for Famous Trains, Derby. 2023
-    
-    Module; classes and functions for:
-    - play_audio.py (included in this file main())
+
+    - play .mp3 and .wav files from a micro SD card
+
+    As module: classes and functions for:
+    - play_audio.py (included in this file as main())
     - play_audio_i2s.py
-    
-    - plays .mp3 and .wav files from a micro SD card
-    - line-level or I2S output:
-        -- passed as audio_out to play_audio()
-    - CircuitPython supports mono or stereo, at 22 KHz sample rate
-        (or less) and 16-bit WAV format (ref. above)
-    - class inheritance is not used (V 7.3.3 bug)
+
+    Note: class inheritance is not used (V 7.3.3 bug)
 """
 
 # hardware
@@ -118,7 +115,17 @@ class PinOut:
 
 
 class AudioPlayer:
-    """ play audio files under button control """
+    """ play audio files under button control
+        - audio is MP3 or WAV files
+        - plays all audio files in m_dir
+        - audio_channel can be a line or I2S output
+        - CircuitPython supports mono and stereo audio,
+            at 22 KHz sample rate (or less) and
+            16-bit WAV format
+        See: https://learn.adafruit.com/circuitpython-essentials/
+             circuitpython-audio-out
+        
+        """
     # for buttons
     off = False
     on = True
@@ -140,9 +147,8 @@ class AudioPlayer:
             - skip system files with first char == '.' """
         try:
             file_list = os.listdir(self.m_dir)
-            print(f'file list: {file_list}')
         except OSError:
-            print('File list could not be built')
+            print(f'Error in reading directory: {self.m_dir}') 
             sys.exit()
         return tuple([f for f in file_list
                       if f[0] != '.' and file_ext(f) in self.ext_list])
@@ -187,16 +193,17 @@ class AudioPlayer:
         elif ext == 'wav':
             wave = WaveFile(audio_file)
             self.audio_channel.play(wave)
-        print(f'playing: {filename}')
 
     def play_audio_files(self):
         """ play mp3 and wav files under button control """
         list_index = 0
         while True:
             self.wait_led.state = self.off
-            self.play_audio_file(self.files[list_index])
+            filename = self.files[list_index]
+            # optional print statement
+            print(f'playing: {filename}')
+            self.play_audio_file(filename)
             self.wait_audio_finish()
-
             gc.collect()  # free up memory between plays
             self.wait_led.state = self.on
             self.wait_button_press()
@@ -252,6 +259,8 @@ def main():
     audio_channel = AudioOut(audio_pin)
     audio_player = AudioPlayer(audio_folder, audio_channel,
                                play_buttons, skip_btn, led_pin)
+    print(f'audio files: {audio_player.files}')
+    print()
     audio_player.play_audio_files()
 
 
