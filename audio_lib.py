@@ -189,7 +189,7 @@ class AudioPlayer:
             self.audio_channel.play(wave)
         print(f'playing: {filename}')
 
-    def play_audio_list(self):
+    def play_audio_files(self):
         """ play mp3 and wav files under button control """
         list_index = 0
         while True:
@@ -252,7 +252,7 @@ def main():
     audio_channel = AudioOut(audio_pin)
     audio_player = AudioPlayer(audio_folder, audio_channel,
                                play_buttons, skip_btn, led_pin)
-    audio_player.play_audio_list()
+    audio_player.play_audio_files()
 
 
 if __name__ == '__main__':

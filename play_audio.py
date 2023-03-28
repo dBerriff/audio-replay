@@ -75,7 +75,7 @@ def main():
 
     audio_player = AudioPlayer(audio_folder, audio_channel,
                                play_buttons, skip_btn, led_pin)
-    audio_player.play_audio_list()
+    audio_player.play_audio_files()
 
 
 if __name__ == '__main__':
