@@ -16,7 +16,7 @@
     - play_audio.py (included in this file as main())
     - play_audio_i2s.py
 
-    Note: class inheritance is not used (V 7.3.3 bug)
+    Note: class inheritance is not used (CP V 7.3.3 bug)
 """
 
 # hardware
@@ -36,21 +36,6 @@ import os
 import sys
 from random import randint
 import gc  # garbage collection for RAM
-
-
-def shuffle(tuple_) -> tuple:
-    """ return a shuffled tuple of a tuple or list
-        - Durstenfeld / Fisher-Yates shuffle algorithm """
-    n = len(tuple_)
-    if n < 2:
-        return tuple_
-    s_list = list(tuple_)
-    limit = n - 1
-    for i in range(limit):  # exclusive range
-        j = randint(i, limit)  # inclusive range
-        if j != i:
-            s_list[i], s_list[j] = s_list[j], s_list[i]
-    return tuple(s_list)
 
 
 def file_ext(name_) -> str:
@@ -116,6 +101,8 @@ class PinOut:
 
 class AudioPlayer:
     """ play audio files under button control
+        - only one instance is supported by CP running on a Pico
+            -- CP reports insufficient number of timers
         - audio is an MP3 or WAV file
         - plays all audio files in: m_dir
         - audio_channel can be line or I2S output
@@ -169,7 +156,7 @@ class AudioPlayer:
                 if button.is_on:
                     wait = False
 
-    def _set_decoder(self):
+    def _set_decoder(self) -> MP3Decoder:
         """ return decoder if required else None """
         decoder = None
         for filename in self.files:
@@ -224,9 +211,23 @@ def main():
     except ImportError:
         from audiopwmio import PWMAudioOut as AudioOut
 
-    # === USER parameters ===
+    def shuffle(tuple_) -> tuple:
+        """ return a shuffled tuple of a tuple or list
+            - Durstenfeld / Fisher-Yates shuffle algorithm """
+        n = len(tuple_)
+        if n < 2:
+            return tuple_
+        s_list = list(tuple_)
+        limit = n - 1
+        for i in range(limit):  # exclusive range
+            j = randint(i, limit)  # inclusive range
+            if j != i:
+                s_list[i], s_list[j] = s_list[j], s_list[i]
+        return tuple(s_list)
+
+    # === User parameters ===
     
-    audio_folder = 'audio/'
+    audio_folder = 'audio/'  # on SD card
 
     # button pins
     play_pin_1 = board.GP20  # public
@@ -240,18 +241,18 @@ def main():
     # onboard LED pin is: standard Pico: GP25
     led_pin = PinOut(board.GP25)
     
-    # === end USER parameters ===
+    # === end User parameters ===
     
     # assign the board pins
     # buttons
     play_buttons = (Button(play_pin_1), Button(play_pin_2))
     skip_btn = Button(skip_pin)
     # sd card for Cytron Maker Pi Pico
-    # root sd_card directory is: '/sd/'
     sd_card = SdReader(board.GP10,  # clock
                        board.GP11,  # mosi
                        board.GP12,  # miso
                        board.GP15)  # cs
+    # default root sd_card directory is: '/sd/'
     audio_folder = sd_card.dir + audio_folder
     print(f'audio folder is: {audio_folder}')
 
@@ -259,8 +260,11 @@ def main():
     audio_channel = AudioOut(audio_pin)
     audio_player = AudioPlayer(audio_folder, audio_channel,
                                play_buttons, skip_btn, led_pin)
+    # optional: shuffle the file order
+    audio_player.files = shuffle(audio_player.files)
     print(f'audio files: {audio_player.files}')
     print()
+    
     audio_player.play_audio_files()
 
 

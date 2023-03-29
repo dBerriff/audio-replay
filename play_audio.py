@@ -13,9 +13,6 @@
     - line-level mono output
 """
 
-import board
-
-# audio - line-level on a single GP pin
 # module is board-dependent
 try:
     from audioio import AudioOut
@@ -24,8 +21,9 @@ except ImportError:
 
 # required classes and functions
 from audio_lib import Button, PinOut, SdReader, AudioPlayer
-     
+from random import randint
 
+     
 def main():
     """ test: play audio files under button control
         - pins for Cytron Maker Pi Pico board """
@@ -39,6 +37,20 @@ def main():
     except ImportError:
         from audiopwmio import PWMAudioOut as AudioOut
 
+    def shuffle(tuple_) -> tuple:
+        """ return a shuffled tuple of a tuple or list
+            - Durstenfeld / Fisher-Yates shuffle algorithm """
+        n = len(tuple_)
+        if n < 2:
+            return tuple_
+        s_list = list(tuple_)
+        limit = n - 1
+        for i in range(limit):  # exclusive range
+            j = randint(i, limit)  # inclusive range
+            if j != i:
+                s_list[i], s_list[j] = s_list[j], s_list[i]
+        return tuple(s_list)
+
     # === USER parameters ===
     
     audio_folder = 'audio/'
@@ -49,7 +61,7 @@ def main():
     skip_pin = board.GP22  # useful while testing
 
     # audio-out pin (mono)
-    audio_pin = board.GP18  # Cytron jack socket
+    audio_pin = board.GP19  # Cytron jack socket
 
     # LED: indicates waiting for Play button push
     # onboard LED pin is: standard Pico: GP25
@@ -75,6 +87,11 @@ def main():
 
     audio_player = AudioPlayer(audio_folder, audio_channel,
                                play_buttons, skip_btn, led_pin)
+        
+    # optional: shuffle the file order
+    audio_player.files = shuffle(audio_player.files)
+    print(f'audio files: {audio_player.files}')
+    print()
     audio_player.play_audio_files()
 
 
