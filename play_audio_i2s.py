@@ -58,20 +58,22 @@ def main():
                 s_list[i], s_list[j] = s_list[j], s_list[i]
         return tuple(s_list)
 
+    play_pin_1 = None
+    play_pin_2 = None
+
     # === USER parameters ===
     
     audio_folder = 'audio/'
 
     # button pins
     play_pin_1 = board.GP20  # public
-    play_pin_2 = board.GP21  # operator
+    # play_pin_2 = board.GP21  # operator
     skip_pin = board.GP22  # useful while testing
     
     # I2S audio-out pins
     bit_clock = board.GP16
     word_select = board.GP17  # bit_clock pin + 1
     data = board.GP18
-
 
     # LED: indicates waiting for Play button push
     # onboard LED pin is: standard Pico: GP25
@@ -81,7 +83,10 @@ def main():
     
     # assign the board pins
     # buttons
-    play_buttons = (Button(play_pin_1), Button(play_pin_2))
+    if play_pin_2:
+        play_buttons = (Button(play_pin_1), Button(play_pin_2))
+    else:
+        play_buttons = (Button(play_pin_1),)
     skip_btn = Button(skip_pin)
     # sd card for Cytron Maker Pi Pico
     # root sd_card.dir is: '/sd/'

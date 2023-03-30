@@ -225,6 +225,9 @@ def main():
                 s_list[i], s_list[j] = s_list[j], s_list[i]
         return tuple(s_list)
 
+    play_pin_1 = None
+    play_pin_2 = None
+
     # === User parameters ===
     
     audio_folder = 'audio/'  # on SD card
@@ -245,7 +248,10 @@ def main():
     
     # assign the board pins
     # buttons
-    play_buttons = (Button(play_pin_1), Button(play_pin_2))
+    if play_pin_2:
+        play_buttons = (Button(play_pin_1), Button(play_pin_2))
+    else:
+        play_buttons = (Button(play_pin_1),)
     skip_btn = Button(skip_pin)
     # sd card for Cytron Maker Pi Pico
     sd_card = SdReader(board.GP10,  # clock
