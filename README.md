@@ -1,6 +1,10 @@
 # famous_trains
 Code for Famous Trains model railway, Derby.
 
+Play mp3 and wav files stored on an SD card. CircuitPython supports mono or stereo, at 22 KHz sample rate (or less) and 16-bit WAV format.
+
+Audacity is recommended as an open-source audio editor.
+
 ### Files:
 
 **audio_lib.py**: module. This module must be uploaded to the CircuitPython storage without changing the name.
