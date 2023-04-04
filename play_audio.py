@@ -14,10 +14,15 @@
 """
 
 # module is board-dependent
-try:
-    from audioio import AudioOut
-except ImportError:
-    from audiopwmio import PWMAudioOut as AudioOut
+    import board
+
+    # AudioOut - line-level audio on a single GP pin
+    # module is board-dependent:
+    try:
+        from audioio import AudioOut
+    except ImportError:
+        from audiopwmio import PWMAudioOut as AudioOut
+
 
 # required classes and functions
 from audio_lib import Button, PinOut, SdReader, AudioPlayer
@@ -28,14 +33,6 @@ def main():
     """ test: play audio files under button control
         - pins for Cytron Maker Pi Pico board """
     
-    import board
-
-    # AudioOut - line-level audio on a single GP pin
-    # module is board-dependent:
-    try:
-        from audioio import AudioOut
-    except ImportError:
-        from audiopwmio import PWMAudioOut as AudioOut
 
     def shuffle(tuple_) -> tuple:
         """ return a shuffled tuple of a tuple or list
