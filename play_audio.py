@@ -13,48 +13,28 @@
     - line-level mono output
 """
 
-# module is board-dependent
-    import board
+import board  # CircuitPython
 
-    # AudioOut - line-level audio on a single GP pin
-    # module is board-dependent:
-    try:
-        from audioio import AudioOut
-    except ImportError:
-        from audiopwmio import PWMAudioOut as AudioOut
-
+# AudioOut module is board-dependent
+try:
+    from audioio import AudioOut
+except ImportError:
+    from audiopwmio import PWMAudioOut as AudioOut
 
 # required classes and functions
-from audio_lib import Button, PinOut, SdReader, AudioPlayer
-from random import randint
+from audio_lib import Button, PinOut, SdReader, AudioPlayer, shuffle
 
      
 def main():
     """ test: play audio files under button control
         - pins for Cytron Maker Pi Pico board """
     
-
-    def shuffle(tuple_) -> tuple:
-        """ return a shuffled tuple of a tuple or list
-            - Durstenfeld / Fisher-Yates shuffle algorithm """
-        n = len(tuple_)
-        if n < 2:
-            return tuple_
-        s_list = list(tuple_)
-        limit = n - 1
-        for i in range(limit):  # exclusive range
-            j = randint(i, limit)  # inclusive range
-            if j != i:
-                s_list[i], s_list[j] = s_list[j], s_list[i]
-        return tuple(s_list)
-
     # === USER parameters ===
     
     audio_folder = 'audio/'
 
     # button pins
-    play_pin_1 = board.GP20  # public
-    play_pin_2 = board.GP21  # operator
+    play_pins = board.GP20, board.GP21  # public
     skip_pin = board.GP22  # useful while testing
 
     # audio-out pin (mono)
@@ -62,14 +42,17 @@ def main():
 
     # LED: indicates waiting for Play button push
     # onboard LED pin is: standard Pico: GP25
-    led_pin = PinOut(board.GP25)
+    led_pin = board.GP25
     
     # === end USER parameters ===
     
     # assign the board pins
+    if type(play_pins) != tuple:  # checking for type Pin gave error
+        play_pins = play_pins,
     # buttons
-    play_buttons = (Button(play_pin_1), Button(play_pin_2))
+    play_buttons = tuple(Button(pin) for pin in play_pins)
     skip_btn = Button(skip_pin)
+    led_out = PinOut(led_pin)
     # sd card for Cytron Maker Pi Pico
     # root sd_card.dir is: '/sd/'
     sd_card = SdReader(board.GP10,  # clock
@@ -83,7 +66,7 @@ def main():
     audio_channel = AudioOut(audio_pin)
 
     audio_player = AudioPlayer(audio_folder, audio_channel,
-                               play_buttons, skip_btn, led_pin)
+                               play_buttons, skip_btn, led_out)
         
     # optional: shuffle the file order
     audio_player.files = shuffle(audio_player.files)

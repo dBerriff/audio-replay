@@ -27,7 +27,7 @@ import board
 from audiobusio import I2SOut
 
 # required classes and functions
-from audio_lib import Button, PinOut, SdReader, AudioPlayer
+from audio_lib import Button, PinOut, SdReader, AudioPlayer, shuffle
 from random import randint
      
 
@@ -44,30 +44,15 @@ def main():
     except ImportError:
         from audiopwmio import PWMAudioOut as AudioOut
 
-    def shuffle(tuple_) -> tuple:
-        """ return a shuffled tuple of a tuple or list
-            - Durstenfeld / Fisher-Yates shuffle algorithm """
-        n = len(tuple_)
-        if n < 2:
-            return tuple_
-        s_list = list(tuple_)
-        limit = n - 1
-        for i in range(limit):  # exclusive range
-            j = randint(i, limit)  # inclusive range
-            if j != i:
-                s_list[i], s_list[j] = s_list[j], s_list[i]
-        return tuple(s_list)
-
-    play_pin_1 = None
     play_pin_2 = None
 
     # === USER parameters ===
     
     audio_folder = 'audio/'
 
-    # button pins
-    play_pin_1 = board.GP20  # public
-    # play_pin_2 = board.GP21  # operator
+    # button pins: play_pin_1 and skip_pin are required
+    play_pin_1 = board.GP20  # public button
+    play_pin_2 = board.GP21  # operator button
     skip_pin = board.GP22  # useful while testing
     
     # I2S audio-out pins
