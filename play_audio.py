@@ -24,7 +24,7 @@ from audio_lib import Button, PinOut, SdReader, AudioPlayer, shuffle
 
      
 def main():
-    """ test: play audio files under button control
+    """ play audio files under button control
         - pins for Cytron Maker Pi Pico board """
     
     # === USER parameters ===
@@ -39,8 +39,7 @@ def main():
     audio_pin = board.GP18  # Cytron jack socket
 
     # LED: indicates waiting for Play button push
-    # onboard LED pin is: standard Pico: GP25
-    led_pin = board.GP25
+    led_pin = board.LED
     
     # === end USER parameters ===
     

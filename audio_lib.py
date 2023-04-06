@@ -13,7 +13,7 @@
     - play .mp3 and .wav files from a micro SD card
 
     As module: classes and functions for:
-    - play_audio.py (included in this file as main())
+    - play_audio.py
     - play_audio_i2s.py
 
     Note: class inheritance is not used (CP V 7.3.3 bug)
@@ -38,7 +38,7 @@ from random import randint
 import gc  # garbage collection for RAM
 
 
-def file_ext(name_) -> str:
+def file_ext(name_: str) -> str:
     """ return lower-case file extension """
     if name_.rfind('.', 1) > 0:
         ext_ = name_.rsplit('.', 1)[1].lower()
@@ -47,7 +47,7 @@ def file_ext(name_) -> str:
     return ext_
 
 
-def shuffle(tuple_) -> tuple:
+def shuffle(tuple_: tuple) -> tuple:
     """ return a shuffled tuple of a tuple or list
         - Durstenfeld / Fisher-Yates shuffle algorithm """
     n = len(tuple_)
@@ -65,7 +65,8 @@ class SdReader:
     """ sd card reader, SPI protocol """
 
     def __init__(self, clock, mosi, miso, cs, sd_dir='/sd'):
-        self.dir = sd_dir + '/'
+        if sd_dir[-1] != '/':
+            self.dir = sd_dir + '/'
         spi = busio.SPI(clock, MOSI=mosi, MISO=miso)
         try:
             sd_card = sdcardio.SDCard(spi, cs)
@@ -101,7 +102,6 @@ class PinOut:
     def __init__(self, pin):
         self._pin_out = DigitalInOut(pin)
         self._pin_out.direction = Direction.OUTPUT
-
         
     @property
     def state(self) -> bool:
