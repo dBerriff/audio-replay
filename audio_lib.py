@@ -57,8 +57,7 @@ def shuffle(tuple_) -> tuple:
     limit = n - 1
     for i in range(limit):  # exclusive range
         j = randint(i, limit)  # inclusive range
-        if j != i:
-            s_list[i], s_list[j] = s_list[j], s_list[i]
+        s_list[i], s_list[j] = s_list[j], s_list[i]
     return tuple(s_list)
 
 
@@ -86,14 +85,14 @@ class Button:
         self._pin_in.pull = Pull.UP
 
     @property
-    def is_off(self) -> bool:
-        """ pull-up logic for button not pressed """
-        return self._pin_in.value
-
-    @property
     def is_on(self) -> bool:
         """ pull-up logic for button pressed """
         return not self._pin_in.value
+
+    @property
+    def is_off(self) -> bool:
+        """ pull-up logic for button not pressed """
+        return self._pin_in.value
 
 
 class PinOut:
@@ -102,7 +101,7 @@ class PinOut:
     def __init__(self, pin):
         self._pin_out = DigitalInOut(pin)
         self._pin_out.direction = Direction.OUTPUT
-        self.state = False
+
         
     @property
     def state(self) -> bool:
@@ -134,8 +133,8 @@ class AudioPlayer:
 
     ext_list = ('mp3', 'wav')
 
-    def __init__(self, m_dir, audio_channel,
-                 play_buttons, skip_button, wait_led):
+    def __init__(self, m_dir: str, audio_channel: AudioOut,
+                 play_buttons: tuple, skip_button: Button, wait_led: PinOut):
         self.m_dir = m_dir
         self.audio_channel = audio_channel
         self.play_buttons = play_buttons
@@ -182,35 +181,38 @@ class AudioPlayer:
                 break  # instantiate once only
         return decoder
 
-    def play_audio_file(self, filename):
+    def play_audio_file(self, filename: str, print_name: bool = False):
         """ play single audio file """
         try:
             audio_file = open(self.m_dir + filename, 'rb')
         except OSError:
-            print(f'file not found: {filename}')
+            print(f'File not found: {filename}')
             return
         ext = file_ext(filename)
         if ext == 'mp3':
             self.decoder.file = audio_file
-            self.audio_channel.play(self.decoder)
+            stream = self.decoder
         elif ext == 'wav':
-            self.audio_channel.play(WaveFile(audio_file))
+            stream = WaveFile(audio_file)
+        else:
+            print(f'Cannot play: {filename}')
+            return
+        if print_name:
+            print(f'playing: {filename}')
+        self.audio_channel.play(stream)
 
     def play_audio_files(self):
         """ play mp3 and wav files under button control """
         list_index = 0
         while True:
-            self.wait_led.state = self.off
+            list_index = (list_index + 1) % len(self.files)
             filename = self.files[list_index]
-            # optional print statement
-            print(f'playing: {filename}')
-            self.play_audio_file(filename)
-            self.wait_audio_finish()
             gc.collect()  # free up memory between plays
             self.wait_led.state = self.on
             self.wait_button_press()
-            # set index for next file
-            list_index = (list_index + 1) % len(self.files)
+            self.wait_led.state = self.off
+            self.play_audio_file(filename, print_name=True)
+            self.wait_audio_finish()
 
 
 def main():
