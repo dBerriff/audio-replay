@@ -207,7 +207,7 @@ class AudioPlayer:
 
     def play_audio_files(self):
         """ play mp3 and wav files under button control
-        	- start with file [1]; [0] used for statup test """
+            - start with file [1]; [0] used for startup test """
         n_files = len(self.files)
         list_index = 0
         while True:
@@ -217,16 +217,16 @@ class AudioPlayer:
             gc.collect()  # free up memory between plays
             self.wait_led.state = self.on
             if self.button_mode:
-                self.wait_button_press()
+                self.wait_button_press()  # play-button
             else:
-                sleep(0.2)  # reduce multiple skip button reads
+                sleep(0.2)  # avoid multiple skip-button reads
             self.wait_led.state = self.off
             self.play_audio_file(filename, print_name=True)
             self.wait_audio_finish()
 
 
 def main():
-    print('This file should be loaded to CircuitPython storage as a module.')
+    print('This file should be loaded to CIRCUITPY storage as a module.')
 
 
 if __name__ == '__main__':
