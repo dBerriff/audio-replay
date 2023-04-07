@@ -206,7 +206,8 @@ class AudioPlayer:
         self.audio_channel.play(stream)
 
     def play_audio_files(self):
-        """ play mp3 and wav files under button control """
+        """ play mp3 and wav files under button control
+        	- start with file [1]; [0] used for statup test """
         list_index = 0
         while True:
             list_index = (list_index + 1) % len(self.files)
