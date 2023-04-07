@@ -76,9 +76,11 @@ def main():
     audio_player.files = shuffle(audio_player.files)
     print(f'audio files:\n{audio_player.files}')
     print()
+    # play file[0] to check operation
     audio_player.play_audio_file(audio_player.files[0],
                                  print_name=True)
     audio_player.wait_audio_finish()
+    # play all files in rotation from file [1]
     audio_player.play_audio_files()
 
 
