@@ -208,9 +208,11 @@ class AudioPlayer:
     def play_audio_files(self):
         """ play mp3 and wav files under button control
         	- start with file [1]; [0] used for statup test """
+        n_files = len(self.files)
         list_index = 0
         while True:
-            list_index = (list_index + 1) % len(self.files)
+            list_index += 1
+            list_index %= n_files
             filename = self.files[list_index]
             gc.collect()  # free up memory between plays
             self.wait_led.state = self.on
