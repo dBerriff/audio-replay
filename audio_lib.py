@@ -9,6 +9,7 @@
     See: https://learn.adafruit.com/circuitpython-essentials/
                  circuitpython-audio-out
     Adapted by David Jones for Famous Trains, Derby. 2023
+    Hardware: David Herbert
 
     - play .mp3 and .wav files from a micro SD card
 
@@ -133,9 +134,9 @@ class AudioPlayer:
 
     ext_list = ('mp3', 'wav')
 
-    def __init__(self, m_dir: str, audio_channel: AudioOut,
+    def __init__(self, media_dir: str, audio_channel: AudioOut,
                  play_buttons: tuple, skip_button: Button, wait_led: PinOut):
-        self.m_dir = m_dir
+        self.media_dir = media_dir
         self.audio_channel = audio_channel
         self.play_buttons = play_buttons
         self.skip_button = skip_button
@@ -148,12 +149,12 @@ class AudioPlayer:
             - CircuitPython libraries replay .mp3 or .wav files
             - skip system files with first char == '.' """
         try:
-            file_list = os.listdir(self.m_dir)
+            file_list = os.listdir(self.media_dir)
         except OSError:
-            print(f'Error in reading directory: {self.m_dir}') 
+            print(f'Error in reading directory: {self.media_dir}')
             sys.exit()
-        return tuple([f for f in file_list
-                      if f[0] != '.' and file_ext(f) in self.ext_list])
+        return tuple((f for f in file_list
+                      if f[0] != '.' and file_ext(f) in self.ext_list))
 
     def wait_audio_finish(self):
         """ wait for audio to complete or skip_button pressed """
@@ -177,14 +178,14 @@ class AudioPlayer:
         for filename in self.files:
             if file_ext(filename) == 'mp3':
                 # decoder instantiation requires a file
-                decoder = MP3Decoder(open(self.m_dir + filename, 'rb'))
+                decoder = MP3Decoder(open(self.media_dir + filename, 'rb'))
                 break  # instantiate once only
         return decoder
 
     def play_audio_file(self, filename: str, print_name: bool = False):
         """ play single audio file """
         try:
-            audio_file = open(self.m_dir + filename, 'rb')
+            audio_file = open(self.media_dir + filename, 'rb')
         except OSError:
             print(f'File not found: {filename}')
             return

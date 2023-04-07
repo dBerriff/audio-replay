@@ -9,6 +9,7 @@
     See: https://learn.adafruit.com/circuitpython-essentials/
                  circuitpython-audio-out
     Adapted by David Jones for Famous Trains, Derby. 2023
+    Hardware: David Herbert
     
     - line-level mono output
 """
@@ -29,7 +30,7 @@ def main():
     
     # === USER parameters ===
     
-    audio_folder = 'audio/'
+    audio_folder = 'audio'
 
     # button pins
     play_pins = board.GP20, board.GP21
@@ -43,6 +44,8 @@ def main():
     
     # === end USER parameters ===
     
+    if audio_folder[-1] != '/':
+        audio_folder += '/'
     # assign the board pins
     # play_buttons: list or tuple
     if type(play_pins) != tuple:  # checking type(Pin) throws error
