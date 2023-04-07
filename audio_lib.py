@@ -37,6 +37,7 @@ import os
 import sys
 from random import randint
 import gc  # garbage collection for RAM
+from time import sleep
 
 
 def file_ext(name_: str) -> str:
@@ -135,12 +136,14 @@ class AudioPlayer:
     ext_list = ('mp3', 'wav')
 
     def __init__(self, media_dir: str, audio_channel: AudioOut,
-                 play_buttons: tuple, skip_button: Button, wait_led: PinOut):
+                 play_buttons: tuple, skip_button: Button, wait_led: PinOut,
+                 button_mode: bool = True):
         self.media_dir = media_dir
         self.audio_channel = audio_channel
         self.play_buttons = play_buttons
         self.skip_button = skip_button
         self.wait_led = wait_led
+        self.button_mode = button_mode
         self.files = self.get_audio_filenames()
         self.decoder = self._set_decoder()
 
@@ -210,7 +213,10 @@ class AudioPlayer:
             filename = self.files[list_index]
             gc.collect()  # free up memory between plays
             self.wait_led.state = self.on
-            self.wait_button_press()
+            if self.button_mode:
+                self.wait_button_press()
+            else:
+                sleep(0.2)  # reduce multiple skip button reads
             self.wait_led.state = self.off
             self.play_audio_file(filename, print_name=True)
             self.wait_audio_finish()
