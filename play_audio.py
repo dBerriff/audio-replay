@@ -18,7 +18,7 @@ import board  # CircuitPython
 # AudioOut module is board-dependent
 # this is for Rapberry Pi Pico
 from audiopwmio import PWMAudioOut as AudioOut
-from audio_lib import Button, PinOut, SdReader, AudioPlayer, shuffle
+from audio_lib import Button, PinOut, SdReader, AudioPlayer
 
      
 def main():
@@ -70,15 +70,15 @@ def main():
     audio_player = AudioPlayer(audio_folder, audio_channel,
                                play_buttons, skip_btn, led_out,
                                button_mode=button_control)
-        
     # optional: shuffle the audio filenames sequence
-    audio_player.files = shuffle(audio_player.files)
+    audio_player.shuffle_files()
     print(f'audio files:\n{audio_player.files}')
     print()
+    # play a file at startup to check system
     audio_player.play_audio_file(audio_player.files[0],
                                  print_name=True)
     audio_player.wait_audio_finish()
-    audio_player.play_audio_files()
+    audio_player.play_all_files()
 
 
 if __name__ == '__main__':

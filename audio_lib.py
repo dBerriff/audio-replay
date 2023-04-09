@@ -84,8 +84,7 @@ class Button:
 
     def __init__(self, pin):
         self._pin_in = DigitalInOut(pin)
-        self._pin_in.direction = Direction.INPUT
-        self._pin_in.pull = Pull.UP
+        self._pin_in.switch_to_input(Pull.UP)
 
     @property
     def is_on(self) -> bool:
@@ -103,7 +102,7 @@ class PinOut:
     
     def __init__(self, pin):
         self._pin_out = DigitalInOut(pin)
-        self._pin_out.direction = Direction.OUTPUT
+        self._pin_out.switch_to_output()
         
     @property
     def state(self) -> bool:
@@ -139,13 +138,13 @@ class AudioPlayer:
                  play_buttons: tuple, skip_button: Button, wait_led: PinOut,
                  button_mode: bool = True):
         self.media_dir = media_dir
-        self.audio_channel = audio_channel
-        self.play_buttons = play_buttons
-        self.skip_button = skip_button
-        self.wait_led = wait_led
-        self.button_mode = button_mode
         self.files = self.get_audio_filenames()
-        self.decoder = self._set_decoder()
+        self._audio_channel = audio_channel
+        self._play_buttons = play_buttons
+        self._skip_button = skip_button
+        self._wait_led = wait_led
+        self._button_mode = button_mode
+        self._decoder = self._set_decoder()
 
     def get_audio_filenames(self) -> tuple:
         """ from folder, return a list of type in ext_list
@@ -159,18 +158,22 @@ class AudioPlayer:
         return tuple((f for f in file_list
                       if f[0] != '.' and file_ext(f) in self.ext_list))
 
+    def shuffle_files(self):
+        """ shuffle the file list """
+        self.files = shuffle(self.files)
+
     def wait_audio_finish(self):
         """ wait for audio to complete or skip_button pressed """
-        while self.audio_channel.playing:
-            if self.skip_button.is_on:
-                self.audio_channel.stop()
+        while self._audio_channel.playing:
+            if self._skip_button.is_on:
+                self._audio_channel.stop()
 
     def wait_button_press(self):
         """ wait for a button to be pressed """
         print('Waiting for button press ...')
         wait = True
         while wait:
-            for button in self.play_buttons:
+            for button in self._play_buttons:
                 if button.is_on:
                     wait = False
 
@@ -194,8 +197,8 @@ class AudioPlayer:
             return
         ext = file_ext(filename)
         if ext == 'mp3':
-            self.decoder.file = audio_file
-            stream = self.decoder
+            self._decoder.file = audio_file
+            stream = self._decoder
         elif ext == 'wav':
             stream = WaveFile(audio_file)
         else:
@@ -203,9 +206,9 @@ class AudioPlayer:
             return
         if print_name:
             print(f'playing: {filename}')
-        self.audio_channel.play(stream)
+        self._audio_channel.play(stream)
 
-    def play_audio_files(self):
+    def play_all_files(self):
         """ play mp3 and wav files under button control
             - start with file [1]; [0] used for startup test """
         n_files = len(self.files)
@@ -215,12 +218,12 @@ class AudioPlayer:
             list_index %= n_files
             filename = self.files[list_index]
             gc.collect()  # free up memory between plays
-            self.wait_led.state = self.on
-            if self.button_mode:
+            self._wait_led.state = self.on
+            if self._button_mode:
                 self.wait_button_press()  # play-button
             else:
                 sleep(0.2)  # avoid multiple skip-button reads
-            self.wait_led.state = self.off
+            self._wait_led.state = self.off
             self.play_audio_file(filename, print_name=True)
             self.wait_audio_finish()
 

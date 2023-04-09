@@ -25,7 +25,7 @@
 
 import board
 from audiobusio import I2SOut
-from audio_lib import Button, PinOut, SdReader, AudioPlayer, shuffle
+from audio_lib import Button, PinOut, SdReader, AudioPlayer
      
 
 def main():
@@ -79,12 +79,13 @@ def main():
                                button_mode=button_control)
 
     # optional: shuffle the file order
-    audio_player.files = shuffle(audio_player.files)
+    audio_player.shuffle_files()
     print(f'audio files: {audio_player.files}')
     print()
+    # play a file at startup to check system
     audio_player.play_audio_file(audio_player.files[0], print_name=True)
     audio_player.wait_audio_finish()
-    audio_player.play_audio_files()
+    audio_player.play_all_files()
 
 
 if __name__ == '__main__':
