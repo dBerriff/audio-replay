@@ -48,11 +48,12 @@ def main():
 
     # === USER parameters ===
     
-    audio_folder = 'audio/'
+    # uncomment one or the other of the next 2 lines
+    audio_folder = '/sd/audio/'  # for folder on SD card
+    #audio_folder = '/'  # for on-board root folder
 
-    # button pins: play_pin_1 and skip_pin are required
-    play_pin_1 = board.GP20  # public button
-    play_pin_2 = board.GP21  # operator button
+    # button pins
+    play_pins = board.GP20, board.GP21
     skip_pin = board.GP22  # useful while testing
     
     # I2S audio-out pins
@@ -61,35 +62,38 @@ def main():
     data = board.GP18
 
     # LED: indicates waiting for Play button push
-    # onboard LED pin is: standard Pico: GP25
-    led_pin = PinOut(board.GP25)
+    led_pin = board.LED
     
     # === end USER parameters ===
     
     # assign the board pins
-    # buttons
-    if play_pin_2:
-        play_buttons = (Button(play_pin_1), Button(play_pin_2))
+    # play_buttons: list or tuple
+    if type(play_pins) != tuple:  # checking type(Pin) throws error
+        play_buttons = Button(play_pins),
     else:
-        play_buttons = (Button(play_pin_1),)
+        play_buttons = tuple(Button(pin) for pin in play_pins)
     skip_btn = Button(skip_pin)
-    # sd card for Cytron Maker Pi Pico
-    # root sd_card.dir is: '/sd/'
-    sd_card = SdReader(board.GP10,  # clock
-                       board.GP11,  # mosi
-                       board.GP12,  # miso
-                       board.GP15)  # cs
-    audio_folder = sd_card.dir + audio_folder
+    led_out = PinOut(led_pin)
+    
+    # mound SD-card if required
+    if '/sd/' in audio_folder:
+        # pins for Cytron Maker Pi Pico
+        sd_card = SdReader(board.GP10,  # clock
+                           board.GP11,  # mosi
+                           board.GP12,  # miso
+                           board.GP15)  # cs
     print(f'audio folder is: {audio_folder}')
     
     audio_channel = I2SOut(bit_clock, word_select, data)
     audio_player = AudioPlayer(audio_folder, audio_channel,
-                               play_buttons, skip_btn, led_pin)
+                               play_buttons, skip_btn, led_out)
 
     # optional: shuffle the file order
     audio_player.files = shuffle(audio_player.files)
     print(f'audio files: {audio_player.files}')
     print()
+    audio_player.play_audio_file(audio_player.files[0], print_name=True)
+    audio_player.wait_audio_finish()
     audio_player.play_audio_files()
 
 

@@ -30,7 +30,9 @@ def main():
     
     # === USER parameters ===
     
-    audio_folder = 'audio'
+    # uncomment one or the other of the next 2 lines
+    audio_folder = '/sd/audio/'  # for folder on SD card
+    #audio_folder = '/'  # for on-board root folder
 
     # button pins
     play_pins = board.GP20, board.GP21
@@ -44,8 +46,6 @@ def main():
     
     # === end USER parameters ===
     
-    if audio_folder[-1] != '/':
-        audio_folder += '/'
     # assign the board pins
     # play_buttons: list or tuple
     if type(play_pins) != tuple:  # checking type(Pin) throws error
@@ -55,32 +55,27 @@ def main():
     skip_btn = Button(skip_pin)
     led_out = PinOut(led_pin)
     
-    # sd card reader is hard-wired; not user parameters
-    # sd card for Cytron Maker Pi Pico
-    sd_card = SdReader(board.GP10,  # clock
-                       board.GP11,  # mosi
-                       board.GP12,  # miso
-                       board.GP15)  # cs
-    # default sd_card.dir is: '/sd/'
-    audio_folder = sd_card.dir + audio_folder
+    # mound SD-card if required
+    if '/sd/' in audio_folder:
+        # pins for Cytron Maker Pi Pico
+        sd_card = SdReader(board.GP10,  # clock
+                           board.GP11,  # mosi
+                           board.GP12,  # miso
+                           board.GP15)  # cs
     print(f'audio folder is: {audio_folder}')
 
     # for line-level output
     audio_channel = AudioOut(audio_pin)
 
     audio_player = AudioPlayer(audio_folder, audio_channel,
-                               play_buttons, skip_btn, led_out,
-                               button_mode=True)
+                               play_buttons, skip_btn, led_out)
         
     # optional: shuffle the audio filenames sequence
     audio_player.files = shuffle(audio_player.files)
     print(f'audio files:\n{audio_player.files}')
     print()
-    # play file[0] to check operation
-    audio_player.play_audio_file(audio_player.files[0],
-                                 print_name=True)
+    audio_player.play_audio_file(audio_player.files[0], print_name=True)
     audio_player.wait_audio_finish()
-    # play all files in rotation from file [1]
     audio_player.play_audio_files()
 
 
