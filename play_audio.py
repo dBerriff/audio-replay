@@ -62,6 +62,7 @@ def main():
                            board.GP11,  # mosi
                            board.GP12,  # miso
                            board.GP15)  # cs
+        print(f'SD card mounted as: {sd_card.dir}')
     print(f'audio folder is: {audio_folder}')
 
     # for line-level output

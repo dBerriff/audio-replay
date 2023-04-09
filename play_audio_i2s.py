@@ -28,7 +28,6 @@ from audiobusio import I2SOut
 
 # required classes and functions
 from audio_lib import Button, PinOut, SdReader, AudioPlayer, shuffle
-from random import randint
      
 
 def main():
@@ -43,8 +42,6 @@ def main():
         from audioio import AudioOut
     except ImportError:
         from audiopwmio import PWMAudioOut as AudioOut
-
-    play_pin_2 = None
 
     # === USER parameters ===
     
@@ -82,6 +79,7 @@ def main():
                            board.GP11,  # mosi
                            board.GP12,  # miso
                            board.GP15)  # cs
+        print(f'SD card mounted as: {sd_card.dir}')
     print(f'audio folder is: {audio_folder}')
     
     audio_channel = I2SOut(bit_clock, word_select, data)
