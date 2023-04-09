@@ -49,7 +49,9 @@ def main():
 
     # LED: indicates waiting for Play button push
     led_pin = board.LED
-    
+
+    button_control = True  # set to: True or False
+
     # === end USER parameters ===
     
     # assign the board pins
@@ -73,7 +75,8 @@ def main():
     
     audio_channel = I2SOut(bit_clock, word_select, data)
     audio_player = AudioPlayer(audio_folder, audio_channel,
-                               play_buttons, skip_btn, led_out)
+                               play_buttons, skip_btn, led_out,
+                               button_mode=button_control)
 
     # optional: shuffle the file order
     audio_player.files = shuffle(audio_player.files)

@@ -40,6 +40,8 @@ def main():
 
     # LED: indicates waiting for Play button push
     led_pin = board.LED
+
+    button_control = True  # set to: True or False
     
     # === end USER parameters ===
     
@@ -66,13 +68,15 @@ def main():
     audio_channel = AudioOut(audio_pin)
 
     audio_player = AudioPlayer(audio_folder, audio_channel,
-                               play_buttons, skip_btn, led_out)
+                               play_buttons, skip_btn, led_out,
+                               button_mode=button_control)
         
     # optional: shuffle the audio filenames sequence
     audio_player.files = shuffle(audio_player.files)
     print(f'audio files:\n{audio_player.files}')
     print()
-    audio_player.play_audio_file(audio_player.files[0], print_name=True)
+    audio_player.play_audio_file(audio_player.files[0],
+                                 print_name=True)
     audio_player.wait_audio_finish()
     audio_player.play_audio_files()
 
