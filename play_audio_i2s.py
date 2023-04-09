@@ -14,13 +14,9 @@
     and in pin order
     
       Example of I2SOut pins  -->  MAX98357A
-
-          16 bit_clock   ___  __>  LRC
-                            \/       
-          17 word_select ___/\__>  BCLK
-
-          18 data        _______>  DIN
-
+          16 bit_clock        -->  BCLK
+          17 word_select      -->  LRC
+          18 data             -->  DIN
 """
 
 import board
@@ -64,7 +60,6 @@ def main():
     led_out = PinOut(led_pin)
     
     # mound SD-card if required
-    print(f'audio folder requested: {audio_folder}')
     if '/sd/' in audio_folder:
         # pins for Cytron Maker Pi Pico
         sd_card = SdReader(board.GP10,  # clock
@@ -72,7 +67,9 @@ def main():
                            board.GP12,  # miso
                            board.GP15)  # cs
         print(f'SD card mounted as: {sd_card.file_dir}')
-    
+    print(f'audio folder requested: {audio_folder}')
+
+    # for I2S output
     audio_channel = I2SOut(bit_clock, word_select, data)
     audio_player = AudioPlayer(audio_folder, audio_channel,
                                play_buttons, skip_btn, led_out,
@@ -83,7 +80,8 @@ def main():
     print(f'audio files: {audio_player.files}')
     print()
     # play a file at startup to check system
-    audio_player.play_audio_file(audio_player.files[0], print_name=True)
+    audio_player.play_audio_file(audio_player.files[0],
+                                 print_name=True)
     audio_player.wait_audio_finish()
     audio_player.play_all_files()
 

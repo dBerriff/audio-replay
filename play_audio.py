@@ -66,7 +66,6 @@ def main():
 
     # for line-level output
     audio_channel = AudioOut(audio_pin)
-
     audio_player = AudioPlayer(audio_folder, audio_channel,
                                play_buttons, skip_btn, led_out,
                                button_mode=button_control)
