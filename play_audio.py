@@ -55,14 +55,14 @@ def main():
     led_out = PinOut(led_pin)
     
     # mound SD-card if required
-    print(f'audio folder requested: {audio_folder}')
     if '/sd/' in audio_folder:
         # pins for Cytron Maker Pi Pico
         sd_card = SdReader(board.GP10,  # clock
                            board.GP11,  # mosi
                            board.GP12,  # miso
                            board.GP15)  # cs
-        print(f'SD card mounted as: {sd_card.dir}')
+        print(f'SD card mounted as: {sd_card.file_dir}')
+    print(f'audio folder requested: {audio_folder}')
 
     # for line-level output
     audio_channel = AudioOut(audio_pin)

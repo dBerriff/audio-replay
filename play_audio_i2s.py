@@ -71,7 +71,7 @@ def main():
                            board.GP11,  # mosi
                            board.GP12,  # miso
                            board.GP15)  # cs
-        print(f'SD card mounted as: {sd_card.dir}')
+        print(f'SD card mounted as: {sd_card.file_dir}')
     
     audio_channel = I2SOut(bit_clock, word_select, data)
     audio_player = AudioPlayer(audio_folder, audio_channel,

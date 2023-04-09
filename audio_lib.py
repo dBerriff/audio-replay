@@ -67,16 +67,16 @@ class SdReader:
     """ sd card reader, SPI protocol """
 
     def __init__(self, clock, mosi, miso, cs, sd_dir='/sd'):
-        if sd_dir[-1] != '/':
-            self.dir = sd_dir + '/'
         spi = busio.SPI(clock, MOSI=mosi, MISO=miso)
         try:
             sd_card = sdcardio.SDCard(spi, cs)
         except OSError:
-            print('No SD card found.')
+            print('SD card not found.')
             sys.exit()
         vfs = storage.VfsFat(sd_card)
         storage.mount(vfs, sd_dir)
+        self.file_dir = sd_dir + '/'
+
 
 
 class Button:
