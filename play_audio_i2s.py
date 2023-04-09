@@ -25,29 +25,18 @@
 
 import board
 from audiobusio import I2SOut
-
-# required classes and functions
 from audio_lib import Button, PinOut, SdReader, AudioPlayer, shuffle
      
 
 def main():
     """ test: play audio files under button control
         - pins for Cytron Maker Pi Pico board """
-    
-    import board
 
-    # AudioOut - line-level audio on a single GP pin
-    # module is board-dependent:
-    try:
-        from audioio import AudioOut
-    except ImportError:
-        from audiopwmio import PWMAudioOut as AudioOut
+    audio_source = {'SD': '/sd/audio/', 'board': '/'}
 
     # === USER parameters ===
     
-    # uncomment one or the other of the next 2 lines
-    audio_folder = '/sd/audio/'  # for folder on SD card
-    #audio_folder = '/'  # for on-board root folder
+    audio_folder = audio_source['SD']  # 'SD' or 'board'
 
     # button pins
     play_pins = board.GP20, board.GP21

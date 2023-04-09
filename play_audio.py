@@ -15,12 +15,9 @@
 """
 
 import board  # CircuitPython
-
 # AudioOut module is board-dependent
 # this is for Rapberry Pi Pico
 from audiopwmio import PWMAudioOut as AudioOut
-
-# required classes and functions
 from audio_lib import Button, PinOut, SdReader, AudioPlayer, shuffle
 
      
@@ -28,11 +25,11 @@ def main():
     """ play audio files under button control
         - pins for Cytron Maker Pi Pico board """
     
+    audio_source = {'SD': '/sd/audio/', 'board': '/'}
+
     # === USER parameters ===
     
-    # uncomment one or the other of the next 2 lines
-    audio_folder = '/sd/audio/'  # for folder on SD card
-    #audio_folder = '/'  # for on-board root folder
+    audio_folder = audio_source['SD']  # 'SD' or 'board'
 
     # button pins
     play_pins = board.GP20, board.GP21
