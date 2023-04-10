@@ -15,8 +15,8 @@
 """
 
 import board  # CircuitPython
-# AudioOut module is board-dependent
-# this is for Rapberry Pi Pico
+# AudioOut module is processor-dependent
+# this is for RP2040 microprocessor
 from audiopwmio import PWMAudioOut as AudioOut
 from audio_lib import Button, PinOut, SdReader, AudioPlayer
 
@@ -55,18 +55,19 @@ def main():
     led_out = PinOut(led_pin)
     
     # mound SD-card if required
-    if '/sd/' in audio_folder:
+    if audio_folder.find('/sd/') == 0:
         # pins for Cytron Maker Pi Pico
-        sd_card = SdReader(board.GP10,  # clock
-                           board.GP11,  # mosi
-                           board.GP12,  # miso
-                           board.GP15)  # cs
+        sd_card = SdReader(clock=board.GP10,
+                           mosi=board.GP11,
+                           miso=board.GP12,
+                           cs=board.GP15,
+                           sd_dir='/sd')  # no trailing /
         print(f'SD card mounted as: {sd_card.file_dir}')
     print(f'audio folder requested: {audio_folder}')
 
     # for line-level output
-    audio_channel = AudioOut(audio_pin)
-    audio_player = AudioPlayer(audio_folder, audio_channel,
+    o_stream = AudioOut(audio_pin)
+    audio_player = AudioPlayer(audio_folder, o_stream,
                                play_buttons, skip_btn, led_out,
                                button_mode=button_control)
     # optional: shuffle the audio filenames sequence

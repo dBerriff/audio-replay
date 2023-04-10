@@ -70,8 +70,8 @@ def main():
     print(f'audio folder requested: {audio_folder}')
 
     # for I2S output
-    audio_channel = I2SOut(bit_clock, word_select, data)
-    audio_player = AudioPlayer(audio_folder, audio_channel,
+    o_stream = I2SOut(bit_clock, word_select, data)
+    audio_player = AudioPlayer(audio_folder, o_stream,
                                play_buttons, skip_btn, led_out,
                                button_mode=button_control)
 

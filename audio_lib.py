@@ -26,6 +26,7 @@ from digitalio import DigitalInOut, Direction, Pull
 # audio
 from audiomp3 import MP3Decoder
 from audiocore import WaveFile
+from audiopwmio import PWMAudioOut as AudioOut  # for type hint
     
 # SD storage
 import busio
@@ -78,9 +79,9 @@ class SdReader:
         self.file_dir = sd_dir + '/'
 
 
-
 class Button:
-    """ input button, pull-up logic """
+    """ input button, pull-up logic
+        - inheritance gives incorrect return for: value """
 
     def __init__(self, pin):
         self._pin_in = DigitalInOut(pin)
