@@ -41,7 +41,7 @@ def main():
     # LED: indicates waiting for Play button push
     led_pin = board.LED
 
-    button_control = True  # set to: True or False
+    button_control = 1  # set to: 0 or 1 (False or True)
     
     # === end USER parameters ===
     
