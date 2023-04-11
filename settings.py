@@ -19,12 +19,19 @@ play_pins = GP20, GP27
 skip_pin = GP22
 led_pin = LED
 
+button_control = 1  # 0 or 1
+
+i2s_out = 0  # 0 or 1
+
+# audio
+
+# line-level out
 audio_pin = GP18
 
-# false or true
-button_control = 1
-
-# device
+# I2S out
+bit_clock = GP16
+word_select = GP17  # bit_clock pin + 1
+data = GP18
 
 # SD card reader
 # pins for Cytron Maker Pi Pico
