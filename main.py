@@ -21,7 +21,6 @@
 """
 
 # hardware
-import board
 from digitalio import DigitalInOut, Direction, Pull
 
 # audio
@@ -41,7 +40,7 @@ from random import randint
 import gc  # garbage collection for RAM
 from time import sleep
 
-# user settings
+# user and device settings
 import settings
 
 
@@ -237,27 +236,16 @@ def main():
     """ play audio files under button control
         - pins for Cytron Maker Pi Pico board """
 
-    audio_source = {'SD': '/sd/audio/', 'pico': '/'}
-
-    # === USER parameters from setting.py ===
-    folder = settings.folder
-    play_pins = settings.play_pins
-    skip_pin = settings.skip_pin
-    audio_pin = settings.audio_pin
-    led_pin = settings.led_pin
-    button_control = settings.button_control
-    # === end USER parameters ===
-
     # assign the board pins
     # play_buttons: list or tuple
-    if type(play_pins) != tuple:  # checking type(Pin) throws error
-        play_buttons = Button(play_pins),
+    if type(settings.play_pins) != tuple:  # checking type(Pin) throws error
+        play_buttons = Button(settings.play_pins),
     else:
-        play_buttons = tuple(Button(pin) for pin in play_pins)
-    skip_btn = Button(skip_pin)
-    led_out = PinOut(led_pin)
+        play_buttons = tuple(Button(pin) for pin in settings.play_pins)
+    skip_btn = Button(settings.skip_pin)
+    led_out = PinOut(settings.led_pin)
 
-    audio_folder = audio_source[folder]
+    audio_folder = settings.folder
 
     # mount SD-card if required
     if audio_folder.find('/sd/') == 0:
@@ -269,10 +257,10 @@ def main():
     print(f'audio folder requested: {audio_folder}')
 
     # for line-level output
-    o_stream = AudioOut(audio_pin)
+    o_stream = AudioOut(settings.audio_pin)
     audio_player = AudioPlayer(audio_folder, o_stream,
                                play_buttons, skip_btn, led_out,
-                               button_mode=button_control)
+                               button_mode=settings.button_control)
     # optional: shuffle the audio filenames sequence
     audio_player.shuffle_files()
     print(f'audio files:\n{audio_player.files}')
