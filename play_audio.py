@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# audio_lib.py
-
+# play_audio.py
 """
     CircuitPython Essentials Audio Out: plays MP3 and WAV files
     See: https://learn.adafruit.com/circuitpython-essentials/
