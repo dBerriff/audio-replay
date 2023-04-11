@@ -141,15 +141,16 @@ class AudioPlayer:
     ext_list = ('mp3', 'wav')
 
     def __init__(self, media_dir: str, audio_channel: AudioOut,
-                 play_buttons: tuple, skip_button: Button, wait_led: PinOut,
-                 button_mode: bool = True):
+                 play_buttons: tuple, skip_button: Button,
+                 wait_led: PinOut,
+                 button_mode: bool):
         self.media_dir = media_dir
-        self.files = self.get_audio_filenames()
         self._audio_channel = audio_channel
         self._play_buttons = play_buttons
         self._skip_button = skip_button
         self._wait_led = wait_led
         self._button_mode = button_mode
+        self.files = self.get_audio_filenames()
         self._decoder = self._set_decoder()
 
     def get_audio_filenames(self) -> tuple:
@@ -240,6 +241,7 @@ def main():
 
     # assign the board pins
     # play_buttons: list or tuple
+
     if type(settings.play_pins) != tuple:  # checking type(Pin) throws error
         play_buttons = Button(settings.play_pins),
     else:
