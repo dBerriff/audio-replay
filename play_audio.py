@@ -137,7 +137,7 @@ class AudioPlayer:
     off = False
     on = True
 
-    ext_list = ('mp3', 'wav')
+    ext_set = {'mp3', 'wav'}
 
     def __init__(self, media_dir: str, audio_channel: AudioOut,
                  play_buttons: tuple, skip_button: Button,
@@ -161,8 +161,9 @@ class AudioPlayer:
         except OSError:
             print(f'Error in reading directory: {self.media_dir}')
             sys.exit()
+        # return audio filenames skipping system files starting with '.'
         return tuple((f for f in file_list
-                      if f[0] != '.' and file_ext(f) in self.ext_list))
+                      if f[0] != '.' and file_ext(f) in self.ext_set))
 
     def shuffle_files(self):
         """ shuffle the file list """
