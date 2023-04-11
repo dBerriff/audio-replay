@@ -21,13 +21,14 @@
 """
 
 # hardware
+import board
 from digitalio import DigitalInOut, Direction, Pull
 
 # audio
 from audiomp3 import MP3Decoder
 from audiocore import WaveFile
 from audiopwmio import PWMAudioOut as AudioOut  # for type hint
-    
+
 # SD storage
 import busio
 import sdcardio
@@ -39,6 +40,9 @@ import sys
 from random import randint
 import gc  # garbage collection for RAM
 from time import sleep
+
+# user settings
+import settings
 
 
 def file_ext(name_: str) -> str:
@@ -100,16 +104,16 @@ class Button:
 
 class PinOut:
     """ output pin """
-    
+
     def __init__(self, pin):
         self._pin_out = DigitalInOut(pin)
         self._pin_out.switch_to_output()
-        
+
     @property
     def state(self) -> bool:
         """ pin state """
         return self._pin_out.value
-    
+
     @state.setter
     def state(self, value):
         self._pin_out.value = value
@@ -230,7 +234,53 @@ class AudioPlayer:
 
 
 def main():
-    print('This file should be loaded to CIRCUITPY storage as a module.')
+    """ play audio files under button control
+        - pins for Cytron Maker Pi Pico board """
+
+    audio_source = {'SD': '/sd/audio/', 'pico': '/'}
+
+    # === USER parameters from setting.py ===
+    folder = settings.folder
+    play_pins = settings.play_pins
+    skip_pin = settings.skip_pin
+    audio_pin = settings.audio_pin
+    led_pin = settings.led_pin
+    button_control = settings.button_control
+    # === end USER parameters ===
+
+    # assign the board pins
+    # play_buttons: list or tuple
+    if type(play_pins) != tuple:  # checking type(Pin) throws error
+        play_buttons = Button(play_pins),
+    else:
+        play_buttons = tuple(Button(pin) for pin in play_pins)
+    skip_btn = Button(skip_pin)
+    led_out = PinOut(led_pin)
+
+    audio_folder = audio_source[folder]
+
+    # mount SD-card if required
+    if audio_folder.find('/sd/') == 0:
+        sd_card = SdReader(clock=settings.clock,
+                           mosi=settings.mosi, miso=settings.miso,
+                           cs=settings.cs,
+                           sd_dir=settings.sd_dir)
+        print(f'SD card mounted as: {sd_card.file_dir}')
+    print(f'audio folder requested: {audio_folder}')
+
+    # for line-level output
+    o_stream = AudioOut(audio_pin)
+    audio_player = AudioPlayer(audio_folder, o_stream,
+                               play_buttons, skip_btn, led_out,
+                               button_mode=button_control)
+    # optional: shuffle the audio filenames sequence
+    audio_player.shuffle_files()
+    print(f'audio files:\n{audio_player.files}')
+    print()
+    # play a file at startup to check system
+    audio_player.play_audio_file(audio_player.files[0])
+    audio_player.wait_audio_finish()
+    audio_player.play_all_files()
 
 
 if __name__ == '__main__':

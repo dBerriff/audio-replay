@@ -29,7 +29,7 @@ def main():
 
     # === USER parameters ===
     
-    audio_folder = audio_source['SD']  # 'SD' or 'board'
+    folder = 'SD'  # 'SD' or 'board'
 
     # button pins
     play_pins = board.GP20, board.GP21
@@ -41,7 +41,7 @@ def main():
     # LED: indicates waiting for Play button push
     led_pin = board.LED
 
-    button_control = 1  # set to: 0 or 1 (False or True)
+    button_control = 0  # set to: 0 or 1 (False or True)
     
     # === end USER parameters ===
     
@@ -53,8 +53,10 @@ def main():
         play_buttons = tuple(Button(pin) for pin in play_pins)
     skip_btn = Button(skip_pin)
     led_out = PinOut(led_pin)
+
+    audio_folder = audio_source[folder]
     
-    # mound SD-card if required
+    # mount SD-card if required
     if audio_folder.find('/sd/') == 0:
         # pins for Cytron Maker Pi Pico
         sd_card = SdReader(clock=board.GP10,
@@ -75,8 +77,7 @@ def main():
     print(f'audio files:\n{audio_player.files}')
     print()
     # play a file at startup to check system
-    audio_player.play_audio_file(audio_player.files[0],
-                                 print_name=True)
+    audio_player.play_audio_file(audio_player.files[0])
     audio_player.wait_audio_finish()
     audio_player.play_all_files()
 
