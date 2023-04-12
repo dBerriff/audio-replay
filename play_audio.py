@@ -236,7 +236,7 @@ class AudioPlayer:
 
 
 def main():
-    """ play audio files under button control
+    """ play audio files on a Pi Pico
         - pins for Cytron Maker Pi Pico board """
 
     # assign the board pins
