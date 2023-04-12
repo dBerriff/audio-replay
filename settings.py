@@ -15,6 +15,8 @@ audio_source = {'SD': '/sd/audio/', 'pico': '/'}
 
 folder = audio_source['SD']  # "SD" or "pico"
 
+shuffle = 1  # 0 or 1
+
 play_pins = GP20, GP27
 skip_pin = GP22
 led_pin = LED
