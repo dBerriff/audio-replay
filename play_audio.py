@@ -269,7 +269,8 @@ def main():
                                play_buttons, skip_btn, led_out,
                                button_mode=settings.button_control)
     # optional: shuffle the audio filenames sequence
-    audio_player.shuffle_files()
+    if settings.shuffle:
+        audio_player.shuffle_files()
     print(f'audio files:\n{audio_player.files}')
     print()
     # play a file at startup to check system
