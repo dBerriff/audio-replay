@@ -42,3 +42,12 @@ mosi = GP11
 miso = GP12
 cs = GP15
 sd_dir = '/sd'  # no trailing /
+
+
+def main():
+    """"""
+    print('settings file for play_audio.py')
+
+
+if __name__ == '__main__':
+    main()
