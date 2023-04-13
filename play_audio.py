@@ -10,13 +10,12 @@
     Adapted by David Jones for Famous Trains, Derby. 2023
     Hardware: David Herbert
 
-    - play .mp3 and .wav files from a micro SD card
+    - play .mp3 and .wav files from a micro SD card or
+      CircuitPython storage
 
-    As module: classes and functions for:
-    - play_audio.py
-    - play_audio_i2s.py
+    User and hardware settings are taken from settings.py
 
-    Note: class inheritance is not used (CP V 7.3.3 bug)
+    Note: class inheritance is not used (CP V7.3.3 bug)
 """
 
 # hardware
