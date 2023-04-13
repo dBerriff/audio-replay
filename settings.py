@@ -16,8 +16,9 @@ folder = audio_source['SD']  # "SD" or "pico"
 
 shuffle = 1  # 0 or 1
 
-play_pins = GP20, GP21
-skip_pin = GP22
+play_pins = GP20, GP21  # set to None if not required
+skip_pin = GP22  # set to None if not required
+
 led_pin = LED
 
 button_control = 1  # 0 or 1

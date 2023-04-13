@@ -68,7 +68,8 @@ def shuffle(tuple_: tuple) -> tuple:
 
 
 class SdReader:
-    """ sd card reader, SPI protocol """
+    """ sd card reader, SPI protocol
+        - sd_dir name must be or start with '/sd' """
 
     def __init__(self, clock, mosi, miso, cs, sd_dir='/sd'):
         spi = busio.SPI(clock, MOSI=mosi, MISO=miso)
@@ -141,13 +142,14 @@ class AudioPlayer:
     def __init__(self, media_dir: str, audio_channel: AudioOut,
                  play_buttons: tuple, skip_button: Button,
                  wait_led: PinOut,
-                 button_mode: bool):
+                 button_mode: bool, print_f_name: bool):
         self.media_dir = media_dir
         self._audio_channel = audio_channel
         self._play_buttons = play_buttons
         self._skip_button = skip_button
         self._wait_led = wait_led
         self._button_mode = button_mode
+        self.print_name = print_f_name
         self.files = self.get_audio_filenames()
         self._decoder = self._set_decoder()
 
@@ -194,7 +196,7 @@ class AudioPlayer:
                 break  # instantiate once only
         return decoder
 
-    def play_audio_file(self, filename: str, print_name: bool):
+    def play_audio_file(self, filename: str):
         """ play single audio file """
         try:
             audio_file = open(self.media_dir + filename, 'rb')
@@ -210,11 +212,11 @@ class AudioPlayer:
         else:
             print(f'Cannot play: {filename}')
             return
-        if print_name:
+        if self.print_name:
             print(f'playing: {filename}')
         self._audio_channel.play(stream)
 
-    def play_all_files(self, print_name: bool):
+    def play_all_files(self):
         """ play mp3 and wav files under button control
             - start with file [1]; [0] used for startup test """
         n_files = len(self.files)
@@ -230,7 +232,7 @@ class AudioPlayer:
             else:
                 sleep(0.2)  # avoid multiple skip-button reads
             self._wait_led.state = self.off
-            self.play_audio_file(filename, print_name)
+            self.play_audio_file(filename)
             self.wait_audio_finish()
 
 
@@ -239,16 +241,14 @@ def main():
         - pins for Cytron Maker Pi Pico board """
 
     # assign the board pins
-    # play_buttons: list or tuple
-
-    if settings.play_pins:
-        if type(settings.play_pins) != tuple:  # checking type(Pin) throws error
+    if settings.play_pins:  # not None
+        if type(settings.play_pins) != tuple:
             play_buttons = Button(settings.play_pins),
         else:
             play_buttons = tuple(Button(pin) for pin in settings.play_pins)
     else:
         play_buttons = None
-    if settings.skip_pin:
+    if settings.skip_pin:  # not None
         skip_btn = Button(settings.skip_pin)
     else:
         skip_btn = None
@@ -257,7 +257,7 @@ def main():
     audio_folder = settings.folder
 
     # mount SD-card if required
-    if audio_folder.find('/sd/') == 0:
+    if audio_folder.find('/sd') == 0:
         sd_card = SdReader(clock=settings.clock,
                            mosi=settings.mosi, miso=settings.miso,
                            cs=settings.cs,
@@ -272,16 +272,18 @@ def main():
         o_stream = AudioOut(settings.audio_pin)
     audio_player = AudioPlayer(audio_folder, o_stream,
                                play_buttons, skip_btn, led_out,
-                               button_mode=settings.button_control)
+                               button_mode=settings.button_control,
+                               print_f_name=True)
     # optional: shuffle the audio filenames sequence
     if settings.shuffle:
         audio_player.shuffle_files()
     print(f'audio files:\n{audio_player.files}')
     print()
     # play a file at startup to check system
-    audio_player.play_audio_file(audio_player.files[0], print_name=True)
+    audio_player.play_audio_file(audio_player.files[0])
     audio_player.wait_audio_finish()
-    audio_player.play_all_files(print_name=True)
+    # play all files in a repeating loop
+    audio_player.play_all_files()
 
 
 if __name__ == '__main__':
