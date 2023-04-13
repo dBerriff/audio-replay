@@ -7,17 +7,16 @@ from board import GP0, GP1, GP2, GP3, GP4, GP5, GP6, GP7, GP8, GP9, \
     GP20, GP21, GP22, GP23, GP24, GP25, GP26, GP27, LED
 
 # dictionary of available audio folders
-audio_source = {'SD': '/sd/audio/', 'pico': '/'}
+audio_source = {'SD': '/sd/audio/', 'pico': '/audio/'}
 
-# settings
 
-# user
+# === SETTINGS
 
 folder = audio_source['SD']  # "SD" or "pico"
 
 shuffle = 1  # 0 or 1
 
-play_pins = GP20, GP27
+play_pins = GP20, GP21
 skip_pin = GP22
 led_pin = LED
 
