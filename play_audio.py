@@ -252,7 +252,10 @@ def main():
         skip_btn = Button(settings.skip_pin)
     else:
         skip_btn = None
-    led_out = PinOut(settings.led_pin)
+    if settings.led_pin:  # not None
+        led_out = PinOut(settings.led_pin)
+    else:
+        led_out = PinOut(LED)
 
     audio_folder = settings.folder
 
