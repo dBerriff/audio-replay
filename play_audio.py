@@ -20,6 +20,7 @@
 
 # hardware
 from digitalio import DigitalInOut, Direction, Pull
+from board import LED
 
 # audio
 from audiomp3 import MP3Decoder
