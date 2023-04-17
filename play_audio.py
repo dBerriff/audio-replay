@@ -111,12 +111,12 @@ class PinOut:
         self._pin_out.switch_to_output()
 
     @property
-    def state(self) -> bool:
+    def state(self):
         """ pin state """
         return self._pin_out.value
 
     @state.setter
-    def state(self, value):
+    def state(self, value: bool):
         self._pin_out.value = value
 
 
