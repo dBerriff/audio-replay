@@ -68,7 +68,7 @@ class DFPController:
     cmd_dict = {
         'next': 0x01,
         'prev': 0x02,
-        'track': 0x03,  # 0-2999
+        'play': 0x03,  # 0-2999
         'vol_inc': 0x04,
         'vol_dec': 0x05,
         'vol_set': 0x06,  # 0-30
@@ -82,25 +82,36 @@ class DFPController:
         'pause': 0x0e,
         'folder': 0x0f,  # 1-10
         'vol_adj': 0x10,  # msb: enable: 1; lsb: gain: 0-31
-        'repeat_play': 0x11  # 0: stop; 1: start
+        'play_repeat': 0x11,  # 0: stop; 1: start
+        'use_mp3': 0x12,
+        'insert_adv': 0x13,
+        'spec_track_3000': 0x14,
+        'stop_adv': 0x15,
+        'stop': 0x16,
+        'repeat_folder': 0x17,
+        'random_all': 0x18,
+        'repeat_current': 0x19,
+        'set_dac': 0x1a,
         }
     
     query_dict = {
         'send_init': 0x3f,
-        're_tx': 0x40,
+        'retransmit': 0x40,
         'reply': 0x41,
-        'status': 0x42,
-        'vol': 0x43,
-        'eq': 0x44,
-        'mode': 0x45,
-        'version': 0x46,
-        'tf_files': 0x47,
-        'ud_files': 0x48,
-        'fl_files': 0x49,
+        'get_status': 0x42,
+        'get_vol': 0x43,
+        'get_eq': 0x44,
+        'get_mode': 0x45,
+        'get_version': 0x46,
+        'get_tf_files': 0x47,
+        'get_u_files': 0x48,
+        'get_fl_files': 0x49,
         'keep_on': 0x4a,
-        'tf_track': 0x4b,
-        'ud_track': 0x4c,
-        'fl_track': 0x4d
+        'get_tf_track': 0x4b,
+        'get_u_track': 0x4c,
+        'get_fl_track': 0x4d,
+        'get_folder_files': 0x4e,
+        'get_folders': 0x4f,
     }
 
     eq_dict = {
@@ -127,17 +138,17 @@ class DFPController:
         'flash': 5
     }
 
-    inv_query_dict = {
+    response_dict = {
         0x3c: 'stay',
         0x3d: 'stay',
         0x3e: 'stay',
-        0x3f: 'send_init',  # 0 - 0x0f: each bit: one device of low-4 bits???
-        0x40: 're_tx',  # returns error; request re-Tx
+        0x3f: 'send_init',
+        0x40: 're_tx',
         0x41: 'reply',
-        0x42: 'status',
-        0x43: 'vol',
-        0x44: 'eq',
-        0x45: 'pb_mode',
+        0x42: 'q_status',
+        0x43: 'q_volume',
+        0x44: 'q_eq',
+        0x45: 'q_mode',
         0x46: 'sw_version',
         0x47: 'tf_files',
         0x48: 'ud_files',
@@ -161,10 +172,7 @@ class DFPController:
             - template is fixed part of message with 0x00 for data
             - data is dictionary of data settings by index
             - checksum is 2's complement sum of bytes 1 to 6 inclusive """
-        if self.cmd in self.cmd_dict:
-            self.tx_array[self.CMD] = self.cmd_dict[self.cmd]
-        elif self.cmd in self.query_dict:
-            self.tx_array[self.CMD] = self.query_dict[self.cmd]
+        self.tx_array[self.CMD] = self.cmd_dict[self.cmd]
         msb, lsb = slice_reg16(self.parameter)
         self.tx_array[self.P_H] = msb
         self.tx_array[self.P_L] = lsb
@@ -238,37 +246,41 @@ class DFPController:
         
         def friendly_string(ba_):
             """ print f description and parameters """
-            f = self.inv_query_dict[ba_[3]]
+            print(ba_)
+            print(ba_[3])
+            f = self.response_dict[ba_[3]]
             p = (ba_[5] << 8) + ba_[6]
             return f'{f}: {p}'
 
         for ba in self.rx_tuple:
-            #print('Rx:', byte_array_str(ba))
-            if ba:
-                print('Rx:', friendly_string(ba))
+            print('Rx:', byte_array_str(ba))
+            print('Rx:', friendly_string(ba))
 
 
 def main():
     """ test DFPlayer control """
 
     init_list = (
+        ['reset', 0],
         ['vol_set', 5],
-        ['ud_files', 0],
-        ['repeat_play', 0]
+        ['playback', 0],
+        ['play_src', 0]
+        )
+    play_list = (
+        # [cmd['track'], fb, 0x00, 0x01],
+        ['next', 0],
+        ['next', 0],
+        ['next', 0],
+        ['next', 0],
+        ['next', 0]
         )
     end_list = (
-        ['status', 0],
+        ['get_status', 0],
         ['reset', 0]
         )
 
     controller = DFPController(0, 1)
-    sleep(3.0)
-    controller.send_message('reset', 0)
-    controller.print_tx_data()
     sleep(1.5)
-    controller.consume_rx_data()
-    controller.print_rx_data()
-    print()
     for data in init_list:
         controller.send_message(data[0], data[1])
         controller.print_tx_data()
@@ -276,22 +288,16 @@ def main():
         controller.consume_rx_data()
         controller.print_rx_data()
         print()
-    sleep(3.0)
-
-    for track in range(20):
-        controller.send_message('track', track % 11 + 1)
+    sleep(5.0)
+    for data in play_list:
+        controller.send_message(*data)
         controller.print_tx_data()
         sleep(1.0)
         controller.consume_rx_data()
         controller.print_rx_data()
-        controller.send_message('ud_track', 0)
-        controller.print_tx_data()
-        sleep(1.0)
-        controller.consume_rx_data()
-        controller.print_rx_data()
-        sleep(2.0)
+        sleep(5.0)
         print()
-
+    sleep(1.5)
     for data in end_list:
         controller.send_message(*data)
         controller.print_tx_data()
