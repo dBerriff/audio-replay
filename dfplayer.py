@@ -1,11 +1,9 @@
 from machine import UART, Pin
 from time import sleep
-import _thread as thread
 
 """
     DFPlayer
     Communication format:
-
     00: start byte       0x7e
     01: version          0xff
     02: bytes following  0x06
@@ -20,7 +18,6 @@ import _thread as thread
 
 hex_str = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
            'a', 'b', 'c', 'd', 'e', 'f')
-
 
 
 def byte_str(b):
@@ -55,6 +52,7 @@ def slice_reg16(value):
 class DFPController:
     """ control a DFPlayer over UART
         - byte/register/bytearray functions are called """
+
     baud_rate = 9600
     message_template = bytearray([0x7E, 0xFF, 0x06, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xEF])
     # byte indices
@@ -150,9 +148,10 @@ class DFPController:
 
     def __init__(self, pin_t: int, pin_r: int, fb: int = 1):
         self.uart = UART(0, baudrate=self.baud_rate, tx=Pin(pin_t), rx=Pin(pin_r))
-        self.tx_array = self.message_template
+        self.tx_array = bytearray(self.message_template)
         self.tx_array[self.ACK] = fb
         self.rx_tuple = None
+        self._n_tracks = 11
         self.cmd = ''
         self.parameter = 0
 
@@ -204,6 +203,7 @@ class DFPController:
 
     def consume_rx_data(self):
         """"""
+        sleep(1.0)
         rx_data = bytearray()
         while self.uart.any() > 0:
             rx_data += self.uart.read(1)
@@ -221,20 +221,66 @@ class DFPController:
             self.rx_tuple = (rx1, rx2)
         else:
             self.rx_tuple = (rx1,)
+        self.print_rx_data()
+
+    def dfp_init(self):
+        """ """
+        self.send_message('reset', 0)
+        self.print_tx_data()
+        self.consume_rx_data()
+
+    def set_filecount(self):
+        """ """
+        self._n_tracks = 0
+
+    @property
+    def track_count(self):
+        """"""
+        return self._n_tracks
+    
+    def set_volume(self, level):
+        """ """
+        level = max(0, level)
+        level = min(30, level)
+        self.send_message('vol_set', level)
+        self.consume_rx_data()
+    
+    def inc_volume(self):
+        """ """
+        self.send_message('vol_inc', 0)
+        self.consume_rx_data()
+    
+    def dec_volume(self):
+        """ """
+        self.send_message('vol_dec', 0)
+        self.consume_rx_data()
+    
+    def set_repeat_mode(self, mode):
+        """ """
+        
+        self.consume_rx_data()
+    
+    def play_track(self, track_number):
+        """"""
+        track_number = max(0, track_number)
+        track_number = track_number % self.track_count + 1
+        self.send_message('track', track_number)
+        self.print_tx_data()
+        self.consume_rx_data()
 
     def print_tx_data(self):
-        """ print transmitted bytarray """
+        """ print transmitted bytearray """
         def friendly_string(ba_):
             """ print f description and parameters """
             f = self.cmd
             p = (ba_[5] << 8) + ba_[6]
             return f'{f}: {p}'
 
-        #print('Tx:', byte_array_str(self.tx_array))
+        # print('Tx:', byte_array_str(self.tx_array))
         print('Tx:', friendly_string(self.tx_array))
 
     def print_rx_data(self):
-        """ print received bytarrays """
+        """ print received bytearrays """
         
         def friendly_string(ba_):
             """ print f description and parameters """
@@ -243,7 +289,7 @@ class DFPController:
             return f'{f}: {p}'
 
         for ba in self.rx_tuple:
-            #print('Rx:', byte_array_str(ba))
+            # print('Rx:', byte_array_str(ba))
             if ba:
                 print('Rx:', friendly_string(ba))
 
@@ -262,13 +308,9 @@ def main():
         )
 
     controller = DFPController(0, 1)
-    sleep(3.0)
-    controller.send_message('reset', 0)
-    controller.print_tx_data()
     sleep(1.5)
-    controller.consume_rx_data()
-    controller.print_rx_data()
-    print()
+    controller.dfp_init()
+
     for data in init_list:
         controller.send_message(data[0], data[1])
         controller.print_tx_data()
@@ -279,16 +321,7 @@ def main():
     sleep(3.0)
 
     for track in range(20):
-        controller.send_message('track', track % 11 + 1)
-        controller.print_tx_data()
-        sleep(1.0)
-        controller.consume_rx_data()
-        controller.print_rx_data()
-        controller.send_message('ud_track', 0)
-        controller.print_tx_data()
-        sleep(1.0)
-        controller.consume_rx_data()
-        controller.print_rx_data()
+        controller.play_track(track)
         sleep(2.0)
         print()
 
