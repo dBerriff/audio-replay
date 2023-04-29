@@ -127,7 +127,7 @@ class DFPController:
         self.uart = UART(0, baudrate=self.baud_rate, tx=Pin(tx_pin), rx=Pin(rx_pin))
         self.tx_array = bytearray(self.message_template)
         self.tx_array[self.ACK] = feedback
-        self.rx_tuple = None
+        self.rx_b_array = None
         self.cmd = ''
         self.cmd_param = 0
         self.init_param = 0
@@ -318,53 +318,42 @@ class DFPController:
         sleep(0.5)
 
     def consume_rx_data(self):
-        """ reads and prints received data """
+        """ parses and prints received data
+            - intended to be run on RP2040 second core
+            - uses polling as UART interrupts not supported?
+        """
 
         def print_rx_data():
             """ print received bytearrays """
-            for ba in self.rx_tuple:
-                # print('Rx:', byte_array_str(ba))
-                if ba:
-                    print('Rx:', self.friendly_string(ba))
+            # print('Rx:', byte_array_str(self.rx_b_array))
+            if self.rx_b_array:
+                print('Rx:', self.friendly_string(self.rx_b_array))
 
         def parse_rx_data():
             """ parse incoming message parameters and
                 set controller attributes
                 - partial implementation for known requirements """
-            for data in self.rx_tuple:
-                if data[self.CMD] in (0x3c, 0x3d, 0x3e):
-                    # finished playback of track <parameter>: see 3.3.2
-                    self.play_flag.set_off()
-                elif data[self.CMD] == 0x3f:
-                    self.init_param = hex_f.set_reg16(data[5], data[6])
-                elif data[self.CMD] == 0x40:
-                    # error; request retransmission
-                    self.re_tx_flag.set_on()  # not currently checked
-                elif data[self.CMD] == 0x48:
-                    self.track_count = hex_f.set_reg16(data[5], data[6])
-                elif data[self.CMD] == 0x4c:
-                    self.current_track = hex_f.set_reg16(data[5], data[6])
+            data = self.rx_b_array
+            if data[self.CMD] in (0x3c, 0x3d, 0x3e):
+                # finished playback of track <parameter>: see 3.3.2
+                self.play_flag.set_off()
+            elif data[self.CMD] == 0x3f:
+                self.init_param = hex_f.set_reg16(data[5], data[6])
+            elif data[self.CMD] == 0x40:
+                # error; request retransmission
+                self.re_tx_flag.set_on()  # not currently checked
+            elif data[self.CMD] == 0x48:
+                self.track_count = hex_f.set_reg16(data[5], data[6])
+            elif data[self.CMD] == 0x4c:
+                self.current_track = hex_f.set_reg16(data[5], data[6])
 
         while True:
-            sleep(0.1)
+            sleep_ms(20)  # wait for DFP response?
             rx_data = bytearray()
-            while self.uart.any() > 0:
-                rx_data += self.uart.read(1)
-                sleep_ms(2)  # approx for 9600 baud rate
+            if self.uart.any() > 0:
+                rx_data += self.uart.read(10)
             if rx_data and rx_data != self.null_return:
-                if len(rx_data) > 10:
-                    rx1 = rx_data[:10]
-                    if rx1[3] == 0x41:  # reset gets extra 0x00 byte
-                        rx2 = rx_data[11:]
-                    else:
-                        rx2 = rx_data[10:]
-                else:
-                    rx1 = rx_data
-                    rx2 = None
-                if rx2:
-                    self.rx_tuple = (rx1, rx2)
-                else:
-                    self.rx_tuple = (rx1,)
+                self.rx_b_array = rx_data
                 parse_rx_data()
                 print_rx_data()
 
