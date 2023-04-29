@@ -1,6 +1,7 @@
 from machine import UART, Pin
-from time import sleep
+from time import sleep, sleep_ms
 import _thread as thread
+import hex_fns as hex_f
 
 """
     DFPlayer
@@ -16,45 +17,6 @@ import _thread as thread
     08: checksum         lsb
     09: end byte         0xef
 """
-
-hex_str = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-           'a', 'b', 'c', 'd', 'e', 'f')
-
-
-def byte_str(b):
-    """ return str(hex value) of 8-bit byte """
-    lsh = b & 0xf
-    msh = b >> 4
-    return '0x' + hex_str[msh] + hex_str[lsh]
-
-
-def reg16_str(r):
-    """ return str(hex value) of 16-bit register """
-    lsb = r & 0xff
-    msb = r >> 8
-    return byte_str(msb) + byte_str(lsb)
-
-
-def byte_array_str(ba):
-    """ return str(hex value) of a bytearray """
-    ba_str = ''
-    for b in ba:
-        ba_str += byte_str(b) + '\\'
-    return ba_str[:-1]
-
-
-def slice_reg16(value):
-    """ slice 16-bit register into msb and lsb bytes """
-    lsb = value & 0xff
-    msb = value >> 8 & 0xff
-    return msb, lsb    
-
-
-def set_reg16(msb, lsb):
-    """ combine msb and lsb for 16-bit value """
-    value = msb << 8
-    value += lsb
-    return value
 
 
 class Flag:
@@ -143,7 +105,7 @@ class DFPController:
         'rock': 2,
         'jazz': 3,
         'classic': 4,
-        'base': 5
+        'bass': 5
     }
 
     mode_dict = {
@@ -180,12 +142,18 @@ class DFPController:
         string += f'current: {self.current_track}'
         return string
 
+    def friendly_string(self, ba_: bytearray):
+        """ return cmd/qry as str with parameters """
+        f = self.hex_cmd[ba_[3]]
+        p = (ba_[5] << 8) + ba_[6]
+        return f'{f}: {p}'
+
     def build_tx_array(self):
         """ build tx bytearray including checksum specific to DFPlayer
             - template includes unchanging bytes
             - checksum is 2's complement sum of bytes 1 to 6 inclusive """
         self.tx_array[self.CMD] = self.cmd
-        msb, lsb = slice_reg16(self.cmd_param)
+        msb, lsb = hex_f.slice_reg16(self.cmd_param)
         self.tx_array[self.P_H] = msb
         self.tx_array[self.P_L] = lsb
         self.set_checksum()
@@ -204,7 +172,7 @@ class DFPController:
         """ return the 2's complement checksum """
         c_sum = sum(self.tx_array[1:7])
         c_sum = -c_sum
-        msb, lsb = slice_reg16(c_sum)
+        msb, lsb = hex_f.slice_reg16(c_sum)
         self.tx_array[self.C_H] = msb
         self.tx_array[self.C_L] = lsb
 
@@ -213,7 +181,7 @@ class DFPController:
             - alternative computation using byte inversion """
         c_sum = sum(self.tx_array[1:7])
         c_sum = ~c_sum + 1
-        msb, lsb = slice_reg16(c_sum)
+        msb, lsb = hex_f.slice_reg16(c_sum)
         self.tx_array[self.C_H] = msb
         self.tx_array[self.C_L] = lsb
 
@@ -354,17 +322,10 @@ class DFPController:
 
         def print_rx_data():
             """ print received bytearrays """
-            
-            def friendly_string(ba_):
-                """ print f description and parameters """
-                f = self.hex_cmd[ba_[3]]
-                p = (ba_[5] << 8) + ba_[6]
-                return f'{f}: {p}'
-
             for ba in self.rx_tuple:
                 # print('Rx:', byte_array_str(ba))
                 if ba:
-                    print('Rx:', friendly_string(ba))
+                    print('Rx:', self.friendly_string(ba))
 
         def parse_rx_data():
             """ parse incoming message parameters and
@@ -375,21 +336,21 @@ class DFPController:
                     # finished playback of track <parameter>: see 3.3.2
                     self.play_flag.set_off()
                 elif data[self.CMD] == 0x3f:
-                    self.init_param = set_reg16(data[5], data[6])
+                    self.init_param = hex_f.set_reg16(data[5], data[6])
                 elif data[self.CMD] == 0x40:
                     # error; request retransmission
                     self.re_tx_flag.set_on()  # not currently checked
                 elif data[self.CMD] == 0x48:
-                    self.track_count = set_reg16(data[5], data[6])
+                    self.track_count = hex_f.set_reg16(data[5], data[6])
                 elif data[self.CMD] == 0x4c:
-                    self.current_track = set_reg16(data[5], data[6])
+                    self.current_track = hex_f.set_reg16(data[5], data[6])
 
         while True:
             sleep(0.1)
             rx_data = bytearray()
             while self.uart.any() > 0:
                 rx_data += self.uart.read(1)
-                sleep(0.002)  # approx for 9600 baud rate
+                sleep_ms(2)  # approx for 9600 baud rate
             if rx_data and rx_data != self.null_return:
                 if len(rx_data) > 10:
                     rx1 = rx_data[:10]
