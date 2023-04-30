@@ -1,5 +1,6 @@
 # hex_fns.py
-""" support functions for processing and printing hexadecimal values """
+""" support-functions for processing and printing hexadecimal values
+	- print hex values without character substitutions """
 
 hex_str = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
            'a', 'b', 'c', 'd', 'e', 'f')
@@ -38,4 +39,4 @@ def set_reg16(msb, lsb):
     """ combine msb and lsb for 16-bit value """
     value = msb << 8
     value += lsb
-    return value
+    return value & 0xffff
