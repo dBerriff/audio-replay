@@ -16,6 +16,12 @@ import hex_fns as hex_f
     07: checksum         msb
     08: checksum         lsb
     09: end byte         0xef
+    
+    hex_fns are mostly for print out of hex values
+    without character substitutions
+    
+    not all board functions are useful
+    for performance it is reportedly best to not use folders
 """
 
 
@@ -60,7 +66,7 @@ class DFPController:
     hex_cmd = {
         0x01: 'next',
         0x02: 'prev',
-        0x03: 'track',  # 0-2999
+        0x03: 'track',  # 0-2999 (? 1-2999)
         0x04: 'vol_inc',
         0x05: 'vol_dec',
         0x06: 'vol_set',  # 0-30
@@ -143,19 +149,31 @@ class DFPController:
         return string
 
     def friendly_string(self, ba_: bytearray):
-        """ return cmd/qry as str with parameters """
+        """ return function name as str with parameters """
         f = self.hex_cmd[ba_[3]]
         p = (ba_[5] << 8) + ba_[6]
         return f'{f}: {p}'
 
-    def build_tx_array(self):
-        """ build tx bytearray including checksum specific to DFPlayer
-            - template includes unchanging bytes
-            - checksum is 2's complement sum of bytes 1 to 6 inclusive """
-        self.tx_array[self.CMD] = self.cmd
+	def set_m_parameter(self):
+        """ set parameter msb and lsb bytes """
         msb, lsb = hex_f.slice_reg16(self.cmd_param)
         self.tx_array[self.P_H] = msb
         self.tx_array[self.P_L] = lsb
+
+    def set_checksum(self):
+        """ return the 2's complement checksum
+        	- bytes 1 to 6 """
+        c_sum = sum(self.tx_array[1:7])
+        c_sum = -c_sum
+        # c_sum = ~c_sum + 1  # alternative calculation
+        msb, lsb = hex_f.slice_reg16(c_sum)
+        self.tx_array[self.C_H] = msb
+        self.tx_array[self.C_L] = lsb
+
+    def build_tx_array(self):
+        """ insert tx bytearray attributes """
+        self.tx_array[self.CMD] = self.cmd
+        self.set_m_parameter()
         self.set_checksum()
 
     def send_message(self, cmd: int, parameter: int = 0, verbose: bool = True):
@@ -167,23 +185,6 @@ class DFPController:
         if verbose:
             self.print_tx_data()
         sleep(0.2)
-
-    def set_checksum(self):
-        """ return the 2's complement checksum """
-        c_sum = sum(self.tx_array[1:7])
-        c_sum = -c_sum
-        msb, lsb = hex_f.slice_reg16(c_sum)
-        self.tx_array[self.C_H] = msb
-        self.tx_array[self.C_L] = lsb
-
-    def alt_checksum(self):
-        """ return the 2's complement checksum
-            - alternative computation using byte inversion """
-        c_sum = sum(self.tx_array[1:7])
-        c_sum = ~c_sum + 1
-        msb, lsb = hex_f.slice_reg16(c_sum)
-        self.tx_array[self.C_H] = msb
-        self.tx_array[self.C_L] = lsb
 
     @staticmethod
     def check_checksum(ba: bytearray):
@@ -319,15 +320,15 @@ class DFPController:
 
     def consume_rx_data(self):
         """ parses and prints received data
-            - intended to be run on RP2040 second core
-            - uses polling as UART interrupts not supported?
+        	- runs forever (on RP2040 second core)
+            - uses polling as UART interrupts not supported (?)
         """
 
-        def print_rx_data():
-            """ print received bytearrays """
-            # print('Rx:', byte_array_str(self.rx_b_array))
-            if self.rx_b_array:
-                print('Rx:', self.friendly_string(self.rx_b_array))
+        def print_rx_data(verbose=False):
+            """ print bytearray """
+            if verbose:
+                print('Rx:', byte_array_str(self.rx_b_array))
+            print('Rx:', self.friendly_string(self.rx_b_array))
 
         def parse_rx_data():
             """ parse incoming message parameters and
@@ -357,7 +358,7 @@ class DFPController:
                 parse_rx_data()
                 print_rx_data()
 
-    def print_tx_data(self):
+    def print_tx_data(self, verbose=False):
         """ print transmitted bytearray """
 
         def friendly_string(ba_):
@@ -366,7 +367,8 @@ class DFPController:
             p = (ba_[5] << 8) + ba_[6]
             return f'{f}: {p}'
 
-        # print('Tx:', byte_array_str(self.tx_array))
+        if verbose:
+            print('Tx:', byte_array_str(self.tx_array))
         print('Tx:', friendly_string(self.tx_array))
 
 
