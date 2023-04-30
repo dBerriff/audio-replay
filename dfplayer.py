@@ -17,11 +17,24 @@ import hex_fns as hex_f
     08: checksum         lsb
     09: end byte         0xef
     
+    Player logic is at 3.3V
+    Arduino requires 1k resistor -> player Rx
+    
     hex_fns are mostly for print out of hex values
     without character substitutions
-    
-    not all board functions are useful
-    for performance it is reportedly best to not use folders
+
+    See: https://github.com/jonnieZG/DFPlayerMini
+    ref: ZG
+    For Arduino but useful data acknowledged.
+    Recommendation for gapless play is that:
+    - folders are not used
+    - WAV files are used
+    - copy files in required numbering order
+    - remove WAV metadata
+    - following formats work well:
+      - MP3 44100 Hz, Mono, 32-bit float, VBR
+      - WAV 44100 Hz, Mono, 16-bit
+    Also, useful reference for timings
 """
 
 
@@ -136,11 +149,11 @@ class DFPController:
         self.rx_b_array = None
         self.cmd = ''
         self.cmd_param = 0
-        self.init_param = 0
+        self.init_param = 0  # set at init; normally 2
         self._n_tracks = 0
         self._current_track = 0
         self.play_flag = Flag()
-        self.re_tx_flag = Flag()
+        self.re_tx_flag = Flag()  # re-Tx requested; not currently checked
 
     def __str__(self):
         string = f'DFPlayer: init param: {self.init_param}; '
@@ -154,7 +167,7 @@ class DFPController:
         p = (ba_[5] << 8) + ba_[6]
         return f'{f}: {p}'
 
-	def set_m_parameter(self):
+    def set_m_parameter(self):
         """ set parameter msb and lsb bytes """
         msb, lsb = hex_f.slice_reg16(self.cmd_param)
         self.tx_array[self.P_H] = msb
@@ -162,7 +175,7 @@ class DFPController:
 
     def set_checksum(self):
         """ return the 2's complement checksum
-        	- bytes 1 to 6 """
+            - bytes 1 to 6 """
         c_sum = sum(self.tx_array[1:7])
         c_sum = -c_sum
         # c_sum = ~c_sum + 1  # alternative calculation
@@ -176,22 +189,20 @@ class DFPController:
         self.set_m_parameter()
         self.set_checksum()
 
-    def send_message(self, cmd: int, parameter: int = 0, verbose: bool = True):
+    def send_message(self, cmd: int, parameter: int = 0, verbose: bool = False):
         """ send UART control message """
         self.cmd = cmd
         self.cmd_param = parameter
         self.build_tx_array()
         self.uart.write(self.tx_array)
-        if verbose:
-            self.print_tx_data()
-        sleep(0.2)
+        self.print_tx_data(verbose)
+        sleep_ms(100)  # ZG min delay between commands
 
-    @staticmethod
-    def check_checksum(ba: bytearray):
+    def check_checksum(self, ba: bytearray):
         """ returns 0 for consistent checksum """
-        b_sum = sum(ba[1:7])
-        checksum_ = ba[7] << 8  # msb
-        checksum_ += ba[8]  # lsb
+        b_sum = sum(ba[1:self.C_H])
+        checksum_ = ba[self.C_H] << 8  # msb
+        checksum_ += ba[self.C_L]  # lsb
         return (b_sum + checksum_) & 0xffff
 
     @property
@@ -210,6 +221,8 @@ class DFPController:
     @current_track.setter
     def current_track(self, n: int):
         self._current_track = n
+
+    # DFPlayer commands
 
     def play_next(self):
         """ play next track """
@@ -278,7 +291,7 @@ class DFPController:
               so play safe """
         self.send_message(0x0c)
         self.current_track = 0
-        sleep(3.0)
+        sleep_ms(3000)  # ZG
 
     def playback(self):
         """ start/resume playback """
@@ -320,32 +333,32 @@ class DFPController:
 
     def consume_rx_data(self):
         """ parses and prints received data
-        	- runs forever (on RP2040 second core)
+            - runs forever; intention: on RP2040 second core
             - uses polling as UART interrupts not supported (?)
         """
 
         def print_rx_data(verbose=False):
             """ print bytearray """
             if verbose:
-                print('Rx:', byte_array_str(self.rx_b_array))
+                print('Rx:', hex_f.byte_array_str(self.rx_b_array))
+                print(f'Rx: check checksum: {self.check_checksum(self.rx_b_array)}')
             print('Rx:', self.friendly_string(self.rx_b_array))
 
         def parse_rx_data():
-            """ parse incoming message parameters and
-                set controller attributes
+            """ parse incoming message parameters and set controller attributes
                 - partial implementation for known requirements """
             data = self.rx_b_array
             if data[self.CMD] in (0x3c, 0x3d, 0x3e):
-                # finished playback of track <parameter>: see 3.3.2
+                # playback of ud/tf/fl device track finished
+                # parameter is track number: see doc 3.3.2
                 self.play_flag.set_off()
-            elif data[self.CMD] == 0x3f:
+            elif data[self.CMD] == 0x3f:  # q_init
                 self.init_param = hex_f.set_reg16(data[5], data[6])
-            elif data[self.CMD] == 0x40:
-                # error; request retransmission
+            elif data[self.CMD] == 0x40:  # re_tx
                 self.re_tx_flag.set_on()  # not currently checked
-            elif data[self.CMD] == 0x48:
+            elif data[self.CMD] == 0x48:  # q_ud_files
                 self.track_count = hex_f.set_reg16(data[5], data[6])
-            elif data[self.CMD] == 0x4c:
+            elif data[self.CMD] == 0x4c:  # q_ud_track
                 self.current_track = hex_f.set_reg16(data[5], data[6])
 
         while True:
@@ -368,12 +381,22 @@ class DFPController:
             return f'{f}: {p}'
 
         if verbose:
-            print('Tx:', byte_array_str(self.tx_array))
+            print('Tx:', hex_f.byte_array_str(self.tx_array))
+            print(f'Tx: check checksum: {self.check_checksum(self.tx_array)}')
         print('Tx:', friendly_string(self.tx_array))
 
 
 def main():
     """ test DFPlayer control """
+    
+    """
+        For continuous play see Doc 3.3.2 3.
+        - start first track
+        - wait for tf_finish message
+        - wait for 100ms
+        - send normal play (0x0d)
+          -- next track is preloaded
+    """
 
     # start up
     controller = DFPController(tx_pin=0, rx_pin=1, feedback=0)
@@ -383,16 +406,15 @@ def main():
     # get (and set) number of U-Disk files
     controller.send_query(controller.cmd_hex['q_ud_files'])
     # start playback
+    print(controller)
     controller.playback()
     controller.send_query(controller.cmd_hex['q_ud_track'])
-    print(controller)
-    while controller.play_flag.is_set:
-        sleep(1.0)
-    controller.play_next()
-    controller.send_query(controller.cmd_hex['q_ud_track'])
-    print(controller)
-    while controller.play_flag.is_set:
-        sleep(1.0)
+    for i in range(12):
+        while controller.play_flag.is_set:
+            sleep_ms(100)
+        sleep_ms(100)
+        controller.play_next()
+        controller.send_query(controller.cmd_hex['q_ud_track'])
     # reset to close down
     controller.reset()
     sleep(2.0)

@@ -1,6 +1,6 @@
 # hex_fns.py
 """ support-functions for processing and printing hexadecimal values
-	- print hex values without character substitutions """
+    - print hex values without character substitutions """
 
 hex_str = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
            'a', 'b', 'c', 'd', 'e', 'f')
