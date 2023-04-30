@@ -26,7 +26,7 @@ import hex_fns as hex_f
     See: https://github.com/jonnieZG/DFPlayerMini
     ref: ZG
     For Arduino but useful data acknowledged.
-    Recommendation for gapless play is that:
+    Recommendation for gap-less play is that:
     - folders are not used
     - WAV files are used
     - copy files in required numbering order
@@ -391,11 +391,7 @@ def main():
     
     """
         For continuous play see Doc 3.3.2 3.
-        - start first track
-        - wait for tf_finish message
-        - wait for 100ms
-        - send normal play (0x0d)
-          -- next track is preloaded
+        - this does not work as documented - just use next()!
     """
 
     # start up
