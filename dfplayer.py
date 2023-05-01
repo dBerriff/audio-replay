@@ -142,23 +142,26 @@ class DFPController:
         'flash': 5
     }
 
-    def __init__(self, tx_pin: int, rx_pin: int, feedback: int = 1):
+    def __init__(self, tx_pin: int, rx_pin: int, feedback: int = 1, verbose=False):
         self.uart = UART(0, baudrate=self.baud_rate, tx=Pin(tx_pin), rx=Pin(rx_pin))
         self.tx_array = bytearray(self.message_template)
         self.tx_array[self.ACK] = feedback
+        self.verbose = verbose
         self.rx_b_array = None
         self.cmd = ''
         self.cmd_param = 0
         self.init_param = 0  # set at init; normally 2
         self._n_tracks = 0
         self._current_track = 0
+        self.volume = 0
         self.play_flag = Flag()
         self.re_tx_flag = Flag()  # re-Tx requested; not currently checked
 
     def __str__(self):
         string = f'DFPlayer: init param: {self.init_param}; '
         string += f'tracks: {self.track_count}; '
-        string += f'current: {self.current_track}'
+        string += f'current: {self.current_track} '
+        string += f'volume: {self.volume}'
         return string
 
     def friendly_string(self, ba_: bytearray):
@@ -189,13 +192,13 @@ class DFPController:
         self.set_m_parameter()
         self.set_checksum()
 
-    def send_message(self, cmd: int, parameter: int = 0, verbose: bool = False):
+    def send_message(self, cmd: int, parameter: int = 0):
         """ send UART control message """
         self.cmd = cmd
         self.cmd_param = parameter
         self.build_tx_array()
         self.uart.write(self.tx_array)
-        self.print_tx_data(verbose)
+        self.print_tx_data()
         sleep_ms(100)  # ZG min delay between commands
 
     def check_checksum(self, ba: bytearray):
@@ -337,11 +340,11 @@ class DFPController:
             - uses polling as UART interrupts not supported (?)
         """
 
-        def print_rx_data(verbose=False):
+        def print_rx_data():
             """ print bytearray """
-            if verbose:
+            if self.verbose:
                 print('Rx:', hex_f.byte_array_str(self.rx_b_array))
-                print(f'Rx: check checksum: {self.check_checksum(self.rx_b_array)}')
+                print(f'Rx: checksum: {self.check_checksum(self.rx_b_array)}')
             print('Rx:', self.friendly_string(self.rx_b_array))
 
         def parse_rx_data():
@@ -356,6 +359,8 @@ class DFPController:
                 self.init_param = hex_f.set_reg16(data[5], data[6])
             elif data[self.CMD] == 0x40:  # re_tx
                 self.re_tx_flag.set_on()  # not currently checked
+            elif data[self.CMD] == 0x43:  # re_tx
+                self.volume = hex_f.set_reg16(data[5], data[6])
             elif data[self.CMD] == 0x48:  # q_ud_files
                 self.track_count = hex_f.set_reg16(data[5], data[6])
             elif data[self.CMD] == 0x4c:  # q_ud_track
@@ -371,7 +376,7 @@ class DFPController:
                 parse_rx_data()
                 print_rx_data()
 
-    def print_tx_data(self, verbose=False):
+    def print_tx_data(self):
         """ print transmitted bytearray """
 
         def friendly_string(ba_):
@@ -380,9 +385,8 @@ class DFPController:
             p = (ba_[5] << 8) + ba_[6]
             return f'{f}: {p}'
 
-        if verbose:
+        if self.verbose:
             print('Tx:', hex_f.byte_array_str(self.tx_array))
-            print(f'Tx: check checksum: {self.check_checksum(self.tx_array)}')
         print('Tx:', friendly_string(self.tx_array))
 
 
@@ -395,25 +399,27 @@ def main():
     """
 
     # start up
-    controller = DFPController(tx_pin=0, rx_pin=1, feedback=0)
+    controller = DFPController(tx_pin=0, rx_pin=1,
+                               feedback=1, verbose=False)
     thread.start_new_thread(controller.consume_rx_data, ())
     controller.reset()
     controller.set_volume(5)
     # get (and set) number of U-Disk files
     controller.send_query(controller.cmd_hex['q_ud_files'])
-    # start playback
+    controller.send_query(controller.cmd_hex['q_vol'])    # start playback
     print(controller)
     controller.playback()
     controller.send_query(controller.cmd_hex['q_ud_track'])
+    print(controller)
     for i in range(12):
         while controller.play_flag.is_set:
-            sleep_ms(100)
+            sleep_ms(10)
         sleep_ms(100)
         controller.play_next()
         controller.send_query(controller.cmd_hex['q_ud_track'])
-    # reset to close down
+    # reset before close down
     controller.reset()
-    sleep(2.0)
+    sleep(3.0)
     print(controller)
 
 
