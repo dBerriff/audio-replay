@@ -17,7 +17,7 @@ import hex_fns as hex_f
     08: checksum         lsb
     09: end byte         0xef
     
-    Player logic is at 3.3V
+    Player logic is 3.3V
     Arduino requires 1k resistor -> player Rx
     
     hex_fns are mostly for print out of hex values
@@ -85,7 +85,7 @@ class DFPController:
         0x06: 'vol_set',  # 0-30
         0x07: 'eq_set',  # normal/pop/rock/jazz/classic/bass
         0x08: 'play_mode',  # repeat/folder-repeat/single-repeat/random
-        0x09: 'play_src',  # u/tf/aux/sleep/flash
+        0x09: 'play_src',  # u/tf/aux/sleep/flash 1/2/3/4/5
         0x0a: 'standby',
         0x0b: 'normal',
         0x0c: 'reset',
@@ -106,8 +106,8 @@ class DFPController:
         0x44: 'q_eq',
         0x45: 'q_mode',
         0x46: 'q_version',
-        0x47: 'q_tf_files',
-        0x48: 'q_ud_files',
+        0x47: 'q_ud_files',  # TF in doc!
+        0x48: 'q_tf_files',  # UD in doc!
         0x49: 'q_fl_files',
         0x4a: 'keep_on',  # not understood
         0x4b: 'q_tf_track',
@@ -152,16 +152,13 @@ class DFPController:
         self.cmd_param = 0
         self.init_param = 0  # set at init; normally 2
         self._n_tracks = 0
-        self._current_track = 0
-        self.volume = 0
+        self.prev_track = 0
         self.play_flag = Flag()
         self.re_tx_flag = Flag()  # re-Tx requested; not currently checked
 
     def __str__(self):
-        string = f'DFPlayer: init param: {self.init_param}; '
+        string = f'DFPlayer on: {self.uart} init param: {self.init_param}; '
         string += f'tracks: {self.track_count}; '
-        string += f'current: {self.current_track} '
-        string += f'volume: {self.volume}'
         return string
 
     def friendly_string(self, ba_: bytearray):
@@ -216,14 +213,6 @@ class DFPController:
     @track_count.setter
     def track_count(self, n: int):
         self._n_tracks = n
-
-    @property
-    def current_track(self):
-        return self._current_track
-
-    @current_track.setter
-    def current_track(self, n: int):
-        self._current_track = n
 
     # DFPlayer commands
 
@@ -344,16 +333,18 @@ class DFPController:
             """ print bytearray """
             if self.verbose:
                 print('Rx:', hex_f.byte_array_str(self.rx_b_array))
-                print(f'Rx: checksum: {self.check_checksum(self.rx_b_array)}')
+                checksum = self.check_checksum(self.rx_b_array)
+                if checksum:
+                    print(f'Rx: checksum: {checksum}')
             print('Rx:', self.friendly_string(self.rx_b_array))
 
         def parse_rx_data():
             """ parse incoming message parameters and set controller attributes
                 - partial implementation for known requirements """
             data = self.rx_b_array
-            if data[self.CMD] in (0x3c, 0x3d, 0x3e):
-                # playback of ud/tf/fl device track finished
-                # parameter is track number: see doc 3.3.2
+            if data[self.CMD] == 0x3d:
+                # playback of TF track finished; see doc 3.3.2
+                self.prev_track = hex_f.set_reg16(data[5], data[6])
                 self.play_flag.set_off()
             elif data[self.CMD] == 0x3f:  # q_init
                 self.init_param = hex_f.set_reg16(data[5], data[6])
@@ -389,34 +380,32 @@ class DFPController:
             print('Tx:', hex_f.byte_array_str(self.tx_array))
         print('Tx:', friendly_string(self.tx_array))
 
+    def dfp_init(self, vol):
+        """ initialisation commands """
+        self.reset()
+        self.set_volume(vol)
+        self.send_query(self.cmd_hex['q_tf_files'])
+
 
 def main():
     """ test DFPlayer control """
     
     """
-        For continuous play see Doc 3.3.2 3.
-        - this does not work as documented - just use next()!
+        Doc 3.3.2 3. does not work
+        - just use next()!
     """
 
     # start up
     controller = DFPController(tx_pin=0, rx_pin=1,
                                feedback=1, verbose=False)
     thread.start_new_thread(controller.consume_rx_data, ())
-    controller.reset()
-    controller.set_volume(5)
-    # get (and set) number of U-Disk files
-    controller.send_query(controller.cmd_hex['q_ud_files'])
-    controller.send_query(controller.cmd_hex['q_vol'])    # start playback
-    print(controller)
+    controller.dfp_init(vol=5)
     controller.playback()
-    controller.send_query(controller.cmd_hex['q_ud_track'])
-    print(controller)
     for i in range(12):
         while controller.play_flag.is_set:
             sleep_ms(10)
         sleep_ms(100)
         controller.play_next()
-        controller.send_query(controller.cmd_hex['q_ud_track'])
     # reset before close down
     controller.reset()
     sleep(3.0)
