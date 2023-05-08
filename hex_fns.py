@@ -7,14 +7,14 @@ hex_str = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 
 
 def byte_str(b):
-    """ return str(hex value) of 8-bit byte """
+    """ return 8-bit value as hex str """
     lsh = b & 0xf
     msh = b >> 4
     return '0x' + hex_str[msh] + hex_str[lsh]
 
 
 def reg16_str(r):
-    """ return str(hex value) of 16-bit register """
+    """ return 16-bit value as hex str """
     lsb = r & 0xff
     msb = r >> 8
     return byte_str(msb) + byte_str(lsb)
