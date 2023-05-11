@@ -5,7 +5,7 @@ import hex_fns as hex_f
 
 
 class UartTxRx:
-    """ transmit and receive fixed-sized buffers """
+    """ transmit and receive fixed-size buffers """
 
     # buffer size and indices
     BUF_SIZE = const(10)
@@ -16,7 +16,7 @@ class UartTxRx:
     C_H = const(7)  # checksum
     C_L = const(8)
 
-    baud_rate = 9600
+    baud_rate = const(9600)
     
     message_template = bytearray([0x7E, 0xFF, 0x06, 0x00, 0x00,
                                   0x00, 0x00, 0x00, 0x00, 0xEF])
@@ -44,22 +44,20 @@ class UartTxRx:
             - uses polling as UART interrupts not supported (?)
         """
         rx_data = self.rx_buf
-        n_bytes = self.BUF_SIZE
+        n_bytes = len(rx_data)
         while True:
             sleep_ms(200)
             rx_bytes = self.uart.readinto(rx_data, n_bytes)
             if rx_bytes == n_bytes:
                 self.rx_flag = True
 
-    def set_checksum(self):
+    def get_checksum(self):
         """ return the 2's complement checksum
             - bytes 1 to 6 """
-        c_sum = sum(self.tx_buf[1:7])
-        c_sum = -c_sum
+        c_sum = -sum(self.tx_buf[1:7])
         # c_sum = ~c_sum + 1  # alternative calculation
         msb, lsb = hex_f.slice_reg16(c_sum)
-        self.tx_buf[self.C_H] = msb
-        self.tx_buf[self.C_L] = lsb
+        return msb, lsb
 
     def check_checksum(self, ba):
         """ returns 0 for consistent checksum """
@@ -74,7 +72,9 @@ class UartTxRx:
         msb, lsb = hex_f.slice_reg16(param)
         self.tx_buf[self.P_H] = msb
         self.tx_buf[self.P_L] = lsb
-        self.set_checksum()
+        msb, lsb = self.get_checksum()
+        self.tx_buf[self.C_H] = msb
+        self.tx_buf[self.C_L] = lsb
         self.uart.write(self.tx_buf)
         
 
@@ -124,7 +124,7 @@ def main():
     thread.start_new_thread(controller.consume_rx_data, ())
     
     for i in range(10):
-        controller.send_command(i, i*5)
+        controller.send_command(i, i * 10)
         controller.print_tx_buf()
         sleep_ms(200)
         if controller.rx_flag:
