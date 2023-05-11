@@ -87,8 +87,8 @@ class DFPController:
         0x44: 'q_eq',
         0x45: 'q_mode',
         0x46: 'q_version',
-        0x47: 'q_ud_files',  # TF in doc!
-        0x48: 'q_tf_files',  # UD in doc!
+        0x47: 'q_ud_files',
+        0x48: 'q_tf_files',
         0x49: 'q_fl_files',
         0x4a: 'keep_on',  # not understood
         0x4b: 'q_tf_track',
@@ -374,7 +374,7 @@ def main():
 
     # start up
     controller = DFPController(tx_pin=0, rx_pin=1,
-                               feedback=1, verbose=False)
+                               feedback=1, verbose=True)
     thread.start_new_thread(controller.consume_rx_data, ())
     controller.dfp_init(vol=10)
     print(controller)
