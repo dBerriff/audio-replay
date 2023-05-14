@@ -56,7 +56,7 @@ class CommandHandler:
         0x05: 'vol_dec',
         0x06: 'vol_set',  # 0-30
         0x07: 'eq_set',  # normal/pop/rock/jazz/classic/bass
-        0x08: 'play_mode',  # repeat/folder-repeat/single-repeat/random
+        0x08: 'playback_mode',  # repeat/folder-repeat/single-repeat/random
         0x09: 'play_src',  # u/tf/aux/sleep/flash 1/2/3/4/5
         0x0a: 'standby',
         0x0b: 'normal',
@@ -206,7 +206,6 @@ class CommandHandler:
                 message = self.uart_tr.rx_buf
                 parse_rx_message(message)
                 print_rx_message(message)
-
 
 
 def main():
