@@ -1,8 +1,6 @@
-from machine import UART, Pin
 from time import sleep_ms
 import _thread as thread
-import hex_fns as hex_f
-from command_handler import UartTxRx, CommandHandler
+from command_handler import CommandHandler
 
 
 class Controller:
@@ -86,7 +84,6 @@ class Controller:
             - power-on requires 1.5 to 3.0 s
               so play safe """
         self.cmd_handler.send_command('reset')
-        self.prev_track = 0
         self.cmd_handler.play_flag = False
         sleep_ms(3000)  # ZG
 
@@ -145,7 +142,7 @@ def main():
     thread.start_new_thread(controller.cmd_handler.consume_rx_data, ())
     
     controller.dfp_init(vol=15)
-    controller.set_eq(0)
+    controller.set_eq(5)
     controller.set_pb_mode(0)
     controller.repeat_play(1)
     controller.wait()

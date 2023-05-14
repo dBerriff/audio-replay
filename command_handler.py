@@ -1,6 +1,5 @@
 from machine import UART, Pin
 from time import sleep_ms
-import _thread as thread
 import hex_fns as hex_f
 
 
