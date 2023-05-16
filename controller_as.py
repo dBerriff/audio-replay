@@ -1,7 +1,5 @@
-from time import sleep_ms
-import _thread as thread
-from command_handler import CommandHandler
-
+import uasyncio as asyncio
+from command_handler_as import CommandHandler
 
 class Controller:
     """ control DFPlayer"""
@@ -34,19 +32,19 @@ class Controller:
     def inc_volume(self):
         """ increase volume by one unit """
         self.cmd_handler.send_command('vol_inc')
-        sleep_ms(200)
+        await asyncio.sleep_ms(200)
     
     def dec_volume(self):
         """ decrease volume by one unit """
         self.cmd_handler.send_command('vol_dec')
-        sleep_ms(200)
+        await asyncio.sleep_ms(200)
 
     def set_volume(self, level: int):
         """ set volume in range 0-30  """
         level = max(0, level)
         level = min(30, level)
         self.cmd_handler.send_command('vol_set', level)
-        sleep_ms(200)
+        await asyncio.sleep_ms(200)
 
     def set_eq(self, mode: int):
         """ set eq type in range 0-5
@@ -54,11 +52,10 @@ class Controller:
         mode = max(0, mode)
         mode = min(5, mode)
         self.cmd_handler.send_command('eq_set', mode)
-        sleep_ms(200)
+        await asyncio.sleep_ms(200)
 
     def set_pb_mode(self, mode: int):
-        """ set playback mode in range 0-3: errors?
-            - called by repeat_play
+        """ set playback mode in range 0-3
             - ?repeat, folder_repeat, single_repeat, random?
             - 0: repeat tracks
             - 1: repeat tracks (in folder?)
@@ -66,19 +63,19 @@ class Controller:
         mode = max(0, mode)
         mode = min(3, mode)
         self.cmd_handler.send_command('playback_mode', mode)
-        sleep_ms(200)
+        await asyncio.sleep_ms(200)
 
     def standby(self):
         """ set to low-power standby """
         self.cmd_handler.send_command('standby')
         self.cmd_handler.play_flag = False
-        sleep_ms(200)
+        await asyncio.sleep_ms(200)
 
     def normal(self):
         """ set to normal operation (from standby?) """
         self.cmd_handler.send_command('normal')
         self.cmd_handler.play_flag = True
-        sleep_ms(200)
+        await asyncio.sleep_ms(200)
 
     def reset(self):
         """ reset device
@@ -86,7 +83,7 @@ class Controller:
               so play safe """
         self.cmd_handler.send_command('reset')
         self.cmd_handler.play_flag = False
-        sleep_ms(3000)  # ZG
+        await asyncio.sleep_ms(3000)  # ZG
 
     def playback(self):
         """ start/resume playback """
@@ -97,7 +94,7 @@ class Controller:
     def pause(self):
         """ pause playback """
         self.cmd_handler.send_command('pause')
-        sleep_ms(200)
+        await asyncio.sleep_ms(200)
 
     def set_folder(self, folder: int):
         """ set playback folder in range 1-10
@@ -105,52 +102,56 @@ class Controller:
         folder = max(1, folder)
         folder = min(10, folder)
         self.cmd_handler.send_command('folder', folder)
-        sleep_ms(200)
+        await asyncio.sleep_ms(200)
 
-    def repeat_play(self):
+    def repeat_play(self, start: int):
         """ control repeat play:
-            - start=0: stop - does not work!
-            - start=1: starts repeat play
+            - 0: stop - does not work!
+            - 1: start
         """
-        start = 1
-        self.set_pb_mode(0)  # repeats root directory
         self.cmd_handler.send_command('repeat_play', start)
-        self.cmd_handler.play_flag = True
-        sleep_ms(200)
+        if start == 1:
+            self.cmd_handler.play_flag = True
+        else:
+            self.cmd_handler.play_flag = False
+        await asyncio.sleep_ms(200)
 
     # support methods
     
-    def wait(self):
+    async def wait(self):
         """ wait for current track to complete """
         while self.cmd_handler.play_flag:
-            sleep_ms(200)
+            await asyncio.sleep_ms(200)
 
-    def dfp_init(self, vol):
+    async def dfp_init(self, vol):
         """ initialisation commands """
         self.reset()
         self.set_volume(vol)
         self.cmd_handler.send_query('q_tf_files')
         print(f'Track count: {self.cmd_handler.track_count}')
-        sleep_ms(3000)
+        await asyncio.sleep_ms(3000)
 
 
-def main():
+async def main():
     """ test Controller, CommandHandler and UartTxRx """
 
     controller = Controller(uart=0, tx_pin=0, rx_pin=1)
+    print(controller)
     # run cmd_handler Rx on second core
-    thread.start_new_thread(controller.cmd_handler.consume_rx_data, ())
-    
+    asyncio.create_task(controller.cmd_handler.consume_rx_data())
+    await asyncio.sleep_ms(0)
     controller.dfp_init(vol=15)
     controller.set_eq(5)
-    #controller.repeat_play()
     controller.playback()
-    controller.wait()
-    for i in range(5):
-        controller.play_next()
-        controller.wait()
-    controller.pause()
+    task3 = asyncio.create_task(controller.wait())
+    
+    await task3
+
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        asyncio.run(main())
+    finally:
+        asyncio.new_event_loop()  # clear retained state
+        print('test complete')
