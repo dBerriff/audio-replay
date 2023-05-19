@@ -103,6 +103,7 @@ class Button:
     @property
     def is_on(self) -> bool:
         """ pull-up logic for button pressed """
+        sleep(0.002)  # space out noise
         self.read_index += 1
         self.read_index %= self.n_readings
         self.inputs[self.read_index] = self._pin_in.value
