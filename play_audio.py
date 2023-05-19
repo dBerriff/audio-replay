@@ -89,18 +89,24 @@ class Button:
         - inheritance gives incorrect return for: value """
 
     def __init__(self, pin):
+        self.pin = pin
         self._pin_in = DigitalInOut(pin)
         self._pin_in.switch_to_input(Pull.UP)
+        # de-bounce input over n_readings
+        self.read_index = -1
+        self.inputs = [True, True, True]  # pull-up logic
+        self.n_readings = len(self.inputs)
+    
+    def __str__(self):
+        return f'Button on pin: {self.pin}'
 
     @property
     def is_on(self) -> bool:
         """ pull-up logic for button pressed """
-        return not self._pin_in.value
-
-    @property
-    def is_off(self) -> bool:
-        """ pull-up logic for button not pressed """
-        return self._pin_in.value
+        self.read_index += 1
+        self.read_index %= self.n_readings
+        self.inputs[self.read_index] = self._pin_in.value
+        return not any(self.inputs)  # all readings must be False 
 
 
 class PinOut:
@@ -176,6 +182,7 @@ class AudioPlayer:
         while self._audio_channel.playing:
             if self._skip_button:
                 if self._skip_button.is_on:
+                    print(self._skip_button.pin, self._skip_button.inputs)
                     self._audio_channel.stop()
 
     def wait_button_press(self):
@@ -184,6 +191,7 @@ class AudioPlayer:
         while True:
             for button in self._play_buttons:
                 if button.is_on:
+                    print(button.pin, button.inputs)
                     return
 
     def _set_decoder(self) -> MP3Decoder:
@@ -250,9 +258,13 @@ def main():
     else:
         play_buttons = None
     if settings.skip_pin:  # not None
-        skip_btn = Button(settings.skip_pin)
+        skip_button = Button(settings.skip_pin)
     else:
-        skip_btn = None
+        skip_button = None
+    print('Buttons:')
+    for button in play_buttons:
+        print(button)
+    print(skip_button)
     if settings.led_pin:  # not None
         led_out = PinOut(settings.led_pin)
     else:
@@ -275,7 +287,7 @@ def main():
     else:
         o_stream = AudioOut(settings.audio_pin)
     audio_player = AudioPlayer(audio_folder, o_stream,
-                               play_buttons, skip_btn, led_out,
+                               play_buttons, skip_button, led_out,
                                button_mode=settings.button_control,
                                print_f_name=True)
     # optional: shuffle the audio filenames sequence
