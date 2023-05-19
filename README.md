@@ -14,3 +14,5 @@ Audacity is recommended as an open-source audio editor.
 **settings.py**: CircuitPython script. Settings for *play_audio.py*
 
 **command_handler_as.py**: MicroPython script. *asyncio* version of command handler for DFPlayer Mini. DFPlayer documentation has errors so this is work-in-progress. *controller_as.py* will call this module but is not yet complete.
+
+**command_handler.py**: MicroPython script. *Non-asyncio* version. Uses RP2040 second core to poll for UART input. Also work-in-progress.
