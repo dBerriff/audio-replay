@@ -13,28 +13,34 @@ class UartTxRx(UART):
 
     baud_rate = const(9600)
     
-    def __init__(self, uart, tx_pin, rx_pin, buf_size):
+    def __init__(self, uart, tx_pin, rx_pin, buf_size, p_ev):
         super().__init__(uart, self.baud_rate)
         self.init(tx=Pin(tx_pin), rx=Pin(rx_pin))
         self.buf_size = buf_size
         self.tx_buf = bytearray(buf_size)
         self.rx_buf = bytearray(buf_size)
+        self.swriter = asyncio.StreamWriter(self)
+        self.sreader = asyncio.StreamReader(self)
+        self.p_ev = p_ev
         self.rx_ev = asyncio.Event()
 
-    def write_tx_data(self):
+    async def write_tx_data(self):
         """ write the Tx buffer to UART """
-        bytes_sent = self.write(self.tx_buf)
-        return bytes_sent
+        self.swriter.write(self.tx_buf)
+        await self.swriter.drain()
 
     async def read_rx_data(self):
-        """ read received data into Rx buffer """
+        """ read data word into Rx buffer
+            - when parser is ready """
         while True:
             # poll for input
             await asyncio.sleep_ms(20)
-            if not self.rx_ev.is_set():
-                rx_bytes = self.readinto(self.rx_buf, self.buf_size)
-                if rx_bytes == self.buf_size:
-                    self.rx_ev.set()  # receive-data event
+            print(self.p_ev.is_set())
+            if self.p_ev.is_set():  # parser ready for data?
+                res = await self.sreader.readinto(self.rx_buf)
+                print(res)
+                if res == self.buf_size:  # complete data word?
+                    self.rx_ev.set()  # data received
 
 
 class CommandHandler:
@@ -62,7 +68,7 @@ class CommandHandler:
         0x07: 'eq_set',  # normal/pop/rock/jazz/classic/bass
         0x08: 'playback_mode',  # repeat/folder-repeat/single-repeat/random
         0x09: 'play_src',  # u/tf/aux/sleep/flash 1/2/3/4/5
-        0x0a: 'standby',
+        # 0x0a: 'standby',
         0x0b: 'normal',
         0x0c: 'reset',
         0x0d: 'playback',
@@ -119,8 +125,9 @@ class CommandHandler:
     }
 
     def __init__(self, uart, tx_pin, rx_pin):
+        self.p_ready = asyncio.Event()
         self.uart_tr = UartTxRx(uart=uart, tx_pin=tx_pin, rx_pin=rx_pin,
-                                buf_size=10)
+                                buf_size=10, p_ev=self.p_ready)
         # pre-load template fixed values
         for key in self.data_template:
             self.uart_tr.tx_buf[key] = self.data_template[key]
@@ -128,13 +135,16 @@ class CommandHandler:
         self.rx_data = None
         self.track_count = 0
         self.current_track = 0
-        self.play_ev = False
+        self.tx_buf = self.uart_tr.tx_buf
+        self.rx_buf = self.uart_tr.rx_buf
+        self.rx_ev = self.uart_tr.rx_ev
+        self.playing_ev = asyncio.Event()
         self.verbose = False
         self.tf_online = False
 
     def print_tx_message(self):
         """ print bytearray """
-        message = self.uart_tr.tx_buf
+        message = self.tx_buf
         if self.verbose:
             print('Tx:', hex_f.byte_array_str(message))
         print('Tx:', self.hex_cmd[message[self.CMD]],
@@ -143,7 +153,7 @@ class CommandHandler:
 
     def print_rx_message(self):
         """ print bytearray """
-        message = self.uart_tr.rx_buf
+        message = self.rx_buf
         if self.verbose:
             print('Rx:', hex_f.byte_array_str(message))
         print('Rx:', self.hex_cmd[message[self.CMD]],
@@ -153,7 +163,7 @@ class CommandHandler:
     def get_checksum(self):
         """ return the 2's complement checksum of:
             - bytes 1 to 6 """
-        return hex_f.slice_reg16(-sum(self.uart_tr.tx_buf[1:7]))
+        return hex_f.slice_reg16(-sum(self.tx_buf[1:7]))
 
     def check_checksum(self, buf_):
         """ returns 0 for consistent checksum """
@@ -162,23 +172,25 @@ class CommandHandler:
         checksum_ += buf_[self.C_L]  # lsb
         return (byte_sum + checksum_) & 0xffff
 
-    def send_command(self, cmd: str, param=0):
-        """ set tx bytearray values and send """
-        self.uart_tr.tx_buf[self.CMD] = self.cmd_hex[cmd]
+    async def send_command(self, cmd, param=0):
+        """ set tx bytearray values and send
+            - commands set own timing """
+        print('In send_command()')
+        self.tx_buf[self.CMD] = self.cmd_hex[cmd]
         msb, lsb = hex_f.slice_reg16(param)
-        self.uart_tr.tx_buf[self.P_H] = msb
-        self.uart_tr.tx_buf[self.P_L] = lsb
+        self.tx_buf[self.P_H] = msb
+        self.tx_buf[self.P_L] = lsb
         msb, lsb = self.get_checksum()
-        self.uart_tr.tx_buf[self.C_H] = msb
-        self.uart_tr.tx_buf[self.C_L] = lsb
-        self.uart_tr.write_tx_data()
+        self.tx_buf[self.C_H] = msb
+        self.tx_buf[self.C_L] = lsb
+        task = asyncio.create_task(self.uart_tr.write_tx_data())
+        await task
         self.print_tx_message()
 
-    def send_query(self, query: str, parameter=0):
+    async def send_query(self, query: str, parameter=0):
         """ send query to device and pause for reply """
         await asyncio.sleep_ms(500)
         self.send_command(query, parameter)
-        self.print_tx_message()
         await asyncio.sleep_ms(500)
 
     async def consume_rx_data(self):
@@ -192,7 +204,7 @@ class CommandHandler:
 
             if rx_fn == 'tf_finish':
                 self.prev_track = hex_f.set_reg16(message_[self.P_H], message_[self.P_L])
-                self.play_ev = False
+                self.playing_ev.clear()
             elif rx_fn == 'q_init':
                 self.init_param = hex_f.set_reg16(message_[self.P_H], message_[self.P_L])
                 self.tf_online = bool(self.init_param & 0x02)
@@ -206,9 +218,11 @@ class CommandHandler:
                 self.current_track = hex_f.set_reg16(message_[self.P_H], message_[self.P_L])
 
         while True:
-            await self.uart_tr.rx_ev.wait()
-            self.rx_data = bytearray(self.uart_tr.rx_buf)
-            self.uart_tr.rx_ev.clear()
+            self.p_ready.set()  # set parser ready for input
+            await self.rx_ev.wait()  # wait for data input
+            self.p_ready.clear()
+            self.rx_data = bytearray(self.rx_buf)
+            self.rx_ev.clear()
             parse_rx_message(self.rx_data)
             self.print_rx_message()
 
@@ -216,13 +230,16 @@ class CommandHandler:
 async def main():
     """ test CommandHandler and UartTxRx """
     ch = CommandHandler(0, 0, 1)
-    task1 = asyncio.create_task(ch.uart_tr.read_rx_data())
-    task2 = asyncio.create_task(ch.consume_rx_data())
-    ch.send_command('reset')
+    task1 = asyncio.create_task(ch.consume_rx_data())
+    task2 = asyncio.create_task(ch.uart_tr.read_rx_data())
+    task3 = asyncio.create_task(ch.send_command('reset'))
+    await asyncio.sleep_ms(3000)
+    task4 = asyncio.create_task(ch.send_command('vol_set', 15))
     await asyncio.sleep_ms(2000)
-    ch.send_command('playback')
+    await ch.send_query('q_vol')
+    task5 = asyncio.create_task(ch.send_command('playback'))
     await task1
-    await task2    
+
 
 
 if __name__ == '__main__':
