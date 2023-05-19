@@ -41,7 +41,7 @@ from random import randint
 import gc  # garbage collection for RAM
 from time import sleep
 
-# user and device settings
+# device settings
 import settings
 
 
@@ -85,25 +85,36 @@ class SdReader:
 
 
 class Button:
-    """ input button, pull-up logic
-        - inheritance gives incorrect return for: value """
+    """ input button
+        - Pull.UP logic
+        - inheritance not used: CP bug """
+    
+    # class debounce values
+    debounce = 0.02  # s - typical suggested value
+    checks = 3  # should be sufficient? Minimum 1
 
-    inputs = [True, True, True]  # pull-up logic
-    # for de-bounce checks
-    check_limit = len(inputs) - 1
-    if check_limit > 0:
-        check_pause = 0.02 / check_limit
+    # pull-up logic
+    if checks > 1:
+        inputs = []
+        for _ in range(checks):
+            inputs.append(True)
+        check_limit = checks - 1  # no pause after final reading
+        check_pause = debounce / check_limit
     else:
+        inputs = [True]
+        check_limit = 0
         check_pause = 0.0
+        
 
     def __init__(self, pin):
         self.pin = pin  # for diagnostics
         self._pin_in = DigitalInOut(pin)
         self._pin_in.switch_to_input(Pull.UP)
-        self.inputs = list(Button.inputs)
+        self.inputs = list(Button.inputs)  # for diagnostics
     
     def __str__(self):
-        return f'Button on pin: {self.pin} {self.inputs}'
+        """ print() string for Button """
+        return f'Button pin: {self.pin}; Input: {self.inputs}'
 
     @property
     def is_on(self) -> bool:
@@ -112,11 +123,12 @@ class Button:
         # take n_readings - suggest over approx. 20ms
         index = 0
         while index < self.check_limit:
+            # all except final input
             self.inputs[index] = self._pin_in.value
             index += 1
             sleep(self.check_pause)
         self.inputs[index] = self._pin_in.value
-        return not any(self.inputs)  # all readings must be False 
+        return not any(self.inputs)  # all pull-up readings must be False 
 
 
 class PinOut:
@@ -190,15 +202,15 @@ class AudioPlayer:
     def wait_audio_finish(self):
         """ wait for play to complete or skip_button pressed """
         while self._audio_channel.playing:
-            if self._skip_button:
-                if self._skip_button.is_on:
-                    print(self._skip_button.pin, self._skip_button.inputs)
-                    self._audio_channel.stop()
+            if self._skip_button and self._skip_button.is_on:
+                print(self._skip_button.pin, self._skip_button.inputs)
+                self._audio_channel.stop()
 
     def wait_button_press(self):
         """ wait for a button to be pressed """
         print('Waiting for button press ...')
         while True:
+            # blocks until a play button is pressed
             for button in self._play_buttons:
                 if button.is_on:
                     print(button)
@@ -262,6 +274,7 @@ def main():
     # assign the board pins
     if settings.play_pins:  # not None
         if type(settings.play_pins) != tuple:
+            # convert single value to tuple
             play_buttons = Button(settings.play_pins),
         else:
             play_buttons = tuple(Button(pin) for pin in settings.play_pins)
@@ -290,6 +303,7 @@ def main():
                            sd_dir=settings.sd_dir)
         print(f'SD card mounted as: {sd_card.file_dir}')
     print(f'audio folder requested: {audio_folder}')
+    print()
 
     # audio output
     if settings.i2s_out:
@@ -309,7 +323,7 @@ def main():
     audio_player.play_audio_file(audio_player.files[0])
     audio_player.wait_audio_finish()
     # play all files in a repeating loop
-    # optionally with button control (see settings.py)
+    # with button control if settings.button_control is True
     audio_player.play_all_files()
 
 
