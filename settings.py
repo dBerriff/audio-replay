@@ -12,26 +12,26 @@ audio_source = {'SD': '/sd/', 'pico': '/audio/'}
 
 # === SETTINGS
 
-folder = audio_source['SD']  # "SD" or "pico"
+folder = audio_source['SD']  # 'SD': SD-card; 'pico: flash RAM
 
 shuffle = 1  # 0 or 1
 
-# set to None if not required
+# set to None if control buttons not required
 play_pins = GP20, GP21  
 skip_pin = GP22
 # set to None for board LED
 led_pin = None
 
-button_control = 1  # 0 or 1
+button_control = True
 
-i2s_out = 0  # 0 or 1
+i2s_out = False
 
-# audio
+# audio pins - can set to None if not used
 
-# line-level out pin
+# line-level pin out
 audio_pin = GP18
 
-# I2S out pins
+# I2S pins out
 bit_clock = GP16
 word_select = GP17  # bit_clock pin + 1
 data = GP18
@@ -42,7 +42,9 @@ clock = GP10
 mosi = GP11
 miso = GP12
 cs = GP15
-sd_dir = '/sd'  # no trailing /
+sd_dir = '/sd'  # no trailing '/'
+
+# === End of SETTINGS
 
 
 def main():

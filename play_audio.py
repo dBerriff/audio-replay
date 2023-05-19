@@ -88,25 +88,34 @@ class Button:
     """ input button, pull-up logic
         - inheritance gives incorrect return for: value """
 
+    inputs = [True, True, True]  # pull-up logic
+    # for de-bounce checks
+    check_limit = len(inputs) - 1
+    if check_limit > 0:
+        check_pause = 0.02 / check_limit
+    else:
+        check_pause = 0.0
+
     def __init__(self, pin):
-        self.pin = pin
+        self.pin = pin  # for diagnostics
         self._pin_in = DigitalInOut(pin)
         self._pin_in.switch_to_input(Pull.UP)
-        # de-bounce input over n_readings
-        self.read_index = -1
-        self.inputs = [True, True, True]  # pull-up logic
-        self.n_readings = len(self.inputs)
+        self.inputs = list(Button.inputs)
     
     def __str__(self):
-        return f'Button on pin: {self.pin}'
+        return f'Button on pin: {self.pin} {self.inputs}'
 
     @property
     def is_on(self) -> bool:
-        """ pull-up logic for button pressed """
-        sleep(0.002)  # space out noise
-        self.read_index += 1
-        self.read_index %= self.n_readings
-        self.inputs[self.read_index] = self._pin_in.value
+        """ pull-up logic for button pressed
+            - button-press sets input False """
+        # take n_readings - suggest over approx. 20ms
+        index = 0
+        while index < self.check_limit:
+            self.inputs[index] = self._pin_in.value
+            index += 1
+            sleep(self.check_pause)
+        self.inputs[index] = self._pin_in.value
         return not any(self.inputs)  # all readings must be False 
 
 
@@ -192,7 +201,7 @@ class AudioPlayer:
         while True:
             for button in self._play_buttons:
                 if button.is_on:
-                    print(button.pin, button.inputs)
+                    print(button)
                     return
 
     def _set_decoder(self) -> MP3Decoder:
@@ -300,6 +309,7 @@ def main():
     audio_player.play_audio_file(audio_player.files[0])
     audio_player.wait_audio_finish()
     # play all files in a repeating loop
+    # optionally with button control (see settings.py)
     audio_player.play_all_files()
 
 
