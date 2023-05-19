@@ -11,4 +11,4 @@ Audacity is recommended as an open-source audio editor.
 
 **settings.py**: script. Settings for play_audio.py
 
-**command_handler_as.py**: script. asyncio version of command handler for DFPlayer Mini. controller_as.py will call this module but it is not yet complete.
+**command_handler_as.py**: script. asyncio version of command handler for DFPlayer Mini (DF1201S chip). controller_as.py will call this module but it is not yet complete.
