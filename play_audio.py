@@ -4,14 +4,14 @@
 
 # play_audio.py
 """
-    CircuitPython Essentials Audio Out: plays MP3 and WAV files
+    CircuitPython (CP) Essentials Audio Out: plays MP3 and WAV files
     See: https://learn.adafruit.com/circuitpython-essentials/
                  circuitpython-audio-out
     Adapted by David Jones for Famous Trains, Derby. 2023
     Hardware: David Herbert
 
     - play .mp3 and .wav files from a micro SD card or
-      CircuitPython storage
+      CP storage
 
     User and hardware settings are taken from settings.py
 
@@ -90,8 +90,8 @@ class Button:
         - inheritance not used: CP bug """
     
     # class debounce values
-    debounce = 0.02  # s - typical suggested value
     checks = 3  # should be sufficient? Minimum 1
+    check_pause = 0.01  # 0.02 / (checks - 1)
 
     # pull-up logic
     if checks > 1:
@@ -99,12 +99,10 @@ class Button:
         for _ in range(checks):
             inputs.append(True)
         check_limit = checks - 1  # no pause after final reading
-        check_pause = debounce / check_limit
     else:
         inputs = [True]
         check_limit = 0
         check_pause = 0.0
-        
 
     def __init__(self, pin):
         self.pin = pin  # for diagnostics
