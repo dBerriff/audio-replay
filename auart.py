@@ -8,6 +8,7 @@ from machine import UART, Pin
 uart = UART(0, 9600)
 uart.init(tx=Pin(0), rx=Pin(1))
 
+
 class UartTxRx(UART):
     """ UART transmit and receive through fixed-size buffers
         - UART0 maps to pins 0/1, 12/13, 16/17
@@ -18,15 +19,14 @@ class UartTxRx(UART):
 
     baud_rate = const(9600)
     
-    def __init__(self, uart, tx_pin, rx_pin, buf_size):
-        super().__init__(uart, self.baud_rate)
+    def __init__(self, uart_, tx_pin, rx_pin, buf_size):
+        super().__init__(uart_, self.baud_rate)
         self.init(tx=Pin(tx_pin), rx=Pin(rx_pin))
         self.buf_size = buf_size
         self.tx_buf = bytearray(buf_size)
         self.rx_buf = bytearray(buf_size)
         self.swriter = asyncio.StreamWriter(self)
         self.sreader = asyncio.StreamReader(self)
-
 
     async def sender(self):
         print(tx_buf)
@@ -40,6 +40,7 @@ class UartTxRx(UART):
             res = await self.sreader.readinto(self.rx_buf)
             print('Received', res, self.rx_buf)
 
+
 async def main():
     u_tr = UartTxRx(0, 0, 1, 10)
     tx_buf = bytearray(10)
@@ -52,6 +53,7 @@ async def main():
         print('in loop')
         await asyncio.sleep(1)
 
+
 def test():
     try:
         asyncio.run(main())
@@ -60,5 +62,6 @@ def test():
     finally:
         asyncio.new_event_loop()
         print('as_demos.auart.test() to run again.')
+
 
 test()

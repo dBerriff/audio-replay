@@ -8,6 +8,7 @@ class UartTxRx:
     """ UART transmit and receive through fixed-size buffers
         - UART0 maps to pins 0/1, 12/13, 16/17
         - UART1 maps to pins 4/5, 8/9
+        - inheritance appears to create problems with StreamWriter
     """
 
     # buffer size and indices
