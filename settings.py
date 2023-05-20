@@ -23,6 +23,7 @@ skip_pin = GP22
 led_pin = None
 
 button_control = True
+diagnose = True
 
 i2s_out = False
 

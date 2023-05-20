@@ -13,7 +13,9 @@
     - play .mp3 and .wav files from a micro SD card or
       CP storage
 
-    User and hardware settings are taken from settings.py
+    - User and hardware settings are taken from settings.py
+    
+    - Simple multiple button reads to reject single noise spikes 
 
     Note: class inheritance is not used (CP V7.3.3 bug)
 """
@@ -91,7 +93,7 @@ class Button:
     
     # class debounce values
     checks = 3  # should be sufficient? Minimum 1
-    check_pause = 0.01  # 0.02 / (checks - 1)
+    check_pause = 0.01  # approx. 0.02 / (checks - 1)
 
     # pull-up logic
     if checks > 1:
@@ -126,7 +128,7 @@ class Button:
             index += 1
             sleep(self.check_pause)
         self.inputs[index] = self._pin_in.value
-        return not any(self.inputs)  # all pull-up readings must be False 
+        return not any(self.inputs)  # pull-up readings must be False for On
 
 
 class PinOut:
@@ -201,10 +203,10 @@ class AudioPlayer:
         """ wait for play to complete or skip_button pressed """
         while self._audio_channel.playing:
             if self._skip_button and self._skip_button.is_on:
-                print(self._skip_button.pin, self._skip_button.inputs)
+                print(self._skip_button)
                 self._audio_channel.stop()
 
-    def wait_button_press(self):
+    def wait_button_press(self, diagnose=False):
         """ wait for a button to be pressed """
         print('Waiting for button press ...')
         while True:
@@ -213,6 +215,8 @@ class AudioPlayer:
                 if button.is_on:
                     print(button)
                     return
+                if diagnose:
+                    print(button)
 
     def _set_decoder(self) -> MP3Decoder:
         """ return decoder if .mp3 file found
@@ -257,7 +261,7 @@ class AudioPlayer:
             gc.collect()  # free up memory between plays
             self._wait_led.state = self.on
             if self._button_mode:
-                self.wait_button_press()  # play-button
+                self.wait_button_press(diagnose=settings.diagnose)  # play-button
             else:
                 sleep(0.2)  # avoid multiple skip-button reads
             self._wait_led.state = self.off
@@ -312,14 +316,17 @@ def main():
                                play_buttons, skip_button, led_out,
                                button_mode=settings.button_control,
                                print_f_name=True)
+    
     # optional: shuffle the audio filenames sequence
     if settings.shuffle:
         audio_player.shuffle_files()
     print(f'audio files:\n{audio_player.files}')
     print()
+    
     # play a file at startup to check system
     audio_player.play_audio_file(audio_player.files[0])
     audio_player.wait_audio_finish()
+    
     # play all files in a repeating loop
     # with button control if settings.button_control is True
     audio_player.play_all_files()
