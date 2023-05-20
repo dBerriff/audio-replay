@@ -16,14 +16,11 @@ folder = audio_source['SD']  # 'SD': SD-card; 'pico: flash RAM
 
 shuffle = 1  # 0 or 1
 
-# set to None if control buttons not required
+# set to None if button control not required
 play_pins = GP20, GP21  
 skip_pin = GP22
-# set to None for board LED
-led_pin = None
 
-button_control = True
-diagnose = True
+diagnostics = False
 
 i2s_out = False
 

@@ -92,25 +92,24 @@ class Button:
         - inheritance not used: CP bug """
     
     # class debounce values
-    checks = 3  # should be sufficient? Minimum 1
+    n_checks = 3  # should be sufficient? Minimum 1
     check_pause = 0.01  # approx. 0.02 / (checks - 1)
 
     # pull-up logic
-    if checks > 1:
-        inputs = []
-        for _ in range(checks):
+    inputs = [True]
+    if n_checks > 1:
+        for _ in range(1, n_checks):
             inputs.append(True)
-        check_limit = checks - 1  # no pause after final reading
+        check_limit = n_checks - 1  # no pause after final reading
     else:
-        inputs = [True]
         check_limit = 0
-        check_pause = 0.0
 
     def __init__(self, pin):
         self.pin = pin  # for diagnostics
         self._pin_in = DigitalInOut(pin)
         self._pin_in.switch_to_input(Pull.UP)
-        self.inputs = list(Button.inputs)  # for diagnostics
+        self.index = -1
+        self.inputs = list(Button.inputs)
     
     def __str__(self):
         """ print() string for Button """
@@ -121,13 +120,9 @@ class Button:
         """ pull-up logic for button pressed
             - button-press sets input False """
         # take n_readings - suggest over approx. 20ms
-        index = 0
-        while index < self.check_limit:
-            # all except final input
-            self.inputs[index] = self._pin_in.value
-            index += 1
-            sleep(self.check_pause)
-        self.inputs[index] = self._pin_in.value
+        self.index += 1
+        self.index %= self.n_checks
+        self.inputs[self.index] = self._pin_in.value
         return not any(self.inputs)  # pull-up readings must be False for On
 
 
@@ -168,17 +163,15 @@ class AudioPlayer:
 
     ext_set = {'mp3', 'wav'}
 
-    def __init__(self, media_dir: str, audio_channel: AudioOut,
-                 play_buttons: tuple, skip_button: Button,
-                 wait_led: PinOut,
-                 button_mode: bool, print_f_name: bool):
+    def __init__(self, media_dir: str, audio_channel: AudioOut):
         self.media_dir = media_dir
         self._audio_channel = audio_channel
-        self._play_buttons = play_buttons
-        self._skip_button = skip_button
-        self._wait_led = wait_led
-        self._button_mode = button_mode
-        self.print_name = print_f_name
+        self.play_buttons = None
+        self.skip_button = None
+        self.wait_led = PinOut(LED)  # board LED
+        self.button_mode = False
+        self.print_f_name = False
+        self.diagnostics = False
         self.files = self.get_audio_filenames()
         self._decoder = self._set_decoder()
 
@@ -200,23 +193,28 @@ class AudioPlayer:
         self.files = shuffle(self.files)
 
     def wait_audio_finish(self):
-        """ wait for play to complete or skip_button pressed """
+        """ wait for:
+            - play to complete or
+            - skip_button pressed if exists """
+        s_button = self.skip_button
         while self._audio_channel.playing:
-            if self._skip_button and self._skip_button.is_on:
-                print(self._skip_button)
+            if s_button and s_button.is_on:
                 self._audio_channel.stop()
+                print(s_button)
 
-    def wait_button_press(self, diagnose=False):
-        """ wait for a button to be pressed """
+    def wait_button_press(self):
+        """ wait for a button to be pressed
+            - pause between checks """
         print('Waiting for button press ...')
         while True:
             # blocks until a play button is pressed
-            for button in self._play_buttons:
+            for button in self.play_buttons:                    
                 if button.is_on:
                     print(button)
                     return
-                if diagnose:
+                if self.diagnostics:
                     print(button)
+            sleep(Button.check_pause)
 
     def _set_decoder(self) -> MP3Decoder:
         """ return decoder if .mp3 file found
@@ -245,7 +243,7 @@ class AudioPlayer:
         else:
             print(f'Cannot play: {filename}')
             return
-        if self.print_name:
+        if self.print_f_name:
             print(f'playing: {filename}')
         self._audio_channel.play(stream)
 
@@ -259,12 +257,12 @@ class AudioPlayer:
             list_index %= n_files
             filename = self.files[list_index]
             gc.collect()  # free up memory between plays
-            self._wait_led.state = self.on
-            if self._button_mode:
-                self.wait_button_press(diagnose=settings.diagnose)  # play-button
+            self.wait_led.state = self.on
+            if self.button_mode:
+                self.wait_button_press()  # play-button
             else:
                 sleep(0.2)  # avoid multiple skip-button reads
-            self._wait_led.state = self.off
+            self.wait_led.state = self.off
             self.play_audio_file(filename)
             self.wait_audio_finish()
 
@@ -282,21 +280,18 @@ def main():
             play_buttons = tuple(Button(pin) for pin in settings.play_pins)
     else:
         play_buttons = None
+        
     if settings.skip_pin:  # not None
         skip_button = Button(settings.skip_pin)
     else:
         skip_button = None
+        
     print('Buttons:')
     for button in play_buttons:
         print(button)
     print(skip_button)
-    if settings.led_pin:  # not None
-        led_out = PinOut(settings.led_pin)
-    else:
-        led_out = PinOut(LED)
 
     audio_folder = settings.folder
-
     # mount SD-card if required
     if audio_folder.find('/sd') == 0:
         sd_card = SdReader(clock=settings.clock,
@@ -312,16 +307,21 @@ def main():
         o_stream = I2SOut(settings.bit_clock, settings.word_select, settings.data)
     else:
         o_stream = AudioOut(settings.audio_pin)
-    audio_player = AudioPlayer(audio_folder, o_stream,
-                               play_buttons, skip_button, led_out,
-                               button_mode=settings.button_control,
-                               print_f_name=True)
-    
+
+    audio_player = AudioPlayer(audio_folder, o_stream)
+    if play_buttons:
+        audio_player.play_buttons = play_buttons
+        audio_player.button_mode = True
+    if skip_button:
+        audio_player.skip_button = skip_button
+
     # optional: shuffle the audio filenames sequence
     if settings.shuffle:
         audio_player.shuffle_files()
     print(f'audio files:\n{audio_player.files}')
     print()
+    audio_player.button_mode = True
+    audio_player.print_f_name = True
     
     # play a file at startup to check system
     audio_player.play_audio_file(audio_player.files[0])
