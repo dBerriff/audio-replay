@@ -6,6 +6,7 @@
 import uasyncio as asyncio
 from machine import UART, Pin
 from collections import deque
+import hex_fns as hex_
 
 
 class UartTR:
@@ -43,7 +44,7 @@ class Queue:
         from deque for efficiency """
 
     def __init__(self, size):
-        self._q = deque((), size, 1)
+        self._q = deque((), size)
         self.buf_len = size
         self._len = 0
         self.is_data = asyncio.Event()
@@ -55,19 +56,14 @@ class Queue:
             self._q.append(item)
         else:
             print('Queue overflow')
-        print(self.q_len)
         self.is_data.set()
             
     def rmv_item(self):
-        """ remove item from the queue, checking queue length """
-        if self._len:
-            self._len -= 1
-            item = self._q.popleft()
-        else:
-            item = None
+        """ remove item from the queue """
+        self._len -= 1
         if self._len == 0:
             self.is_data.clear()
-        return item
+        return self._q.popleft()
     
     @property
     def q_len(self):
@@ -76,22 +72,24 @@ class Queue:
 
     def q_dump(self):
         """ for testing: print queue contents: destructive! """
+        print('Queue contents:')
         while self.q_len:
             item = self.rmv_item()
-            print(self.q_len + 1, item)
+            print(hex_.byte_array_str(item))
 
 
 async def data_consumer(uart_tr_):
-    """ test for consumption of Rx data """
+    """ eventually: test for consumption of Rx data """
     while True:
         await uart_tr_.data_ev.wait()
-        uart_tr_.data_ev.clear()
+        # print('Buffer length:', uart_tr_.rx_queue.q_len)
+        await asyncio.sleep_ms(200)
     
     
 async def main():
     data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
     # tx_q = Queue(20)
-    rx_q = Queue(5)
+    rx_q = Queue(20)
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
     uart_tr = UartTR(uart, 10, rx_q)
@@ -100,14 +98,15 @@ async def main():
     task2 = asyncio.create_task(data_consumer(uart_tr))
     for i in range(10):
         data[0] = i
-        print('Send:', data)
+        print('Send:', hex_.byte_array_str(data))
         await uart_tr.sender(data)
     print()
 
-    await asyncio.sleep_ms(5000)
+    await asyncio.sleep_ms(1000)
     task1.cancel()
-    task2.cancel()
+    #task2.cancel()
     uart_tr.rx_queue.q_dump()
+    await asyncio.sleep_ms(200)
 
 
 if __name__ == '__main__':
