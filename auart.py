@@ -9,49 +9,21 @@ from collections import deque
 import hex_fns as hex_
 
 
-class UartTR:
-    """ implement UART Tx and Rx as stream """
-    
-    def __init__(self, uart, buf_len, rx_queue):
-        self.uart = uart
-        self.buf_len = buf_len
-        self.rx_queue = rx_queue
-        self.out_buf = bytearray(buf_len)
-        self.in_buf = bytearray(buf_len)
-        self.swriter = asyncio.StreamWriter(self.uart, {})
-        self.s_reader = asyncio.StreamReader(self.uart)
-        self.rx_data = ''
-        self.data_ev = asyncio.Event()
-
-    async def sender(self, data):
-        """ send out data item """
-        self.swriter.write(data)
-        await self.swriter.drain()
-        await asyncio.sleep_ms(200)
-
-    async def receiver(self):
-        """ read data stream into buffer """
-        while True:
-            res = await self.s_reader.readinto(self.in_buf)
-            if res == self.buf_len:
-                self.data_ev.set()
-                # add copied bytearray
-                self.rx_queue.add_item(bytearray(self.in_buf))
-
-
 class Queue:
-    """ implement simple FIFO queue
-        from deque for efficiency """
+    """
+    implement simple FIFO queue (of bytearray)
+    from deque for efficiency
+    """
 
-    def __init__(self, size):
-        self._q = deque((), size)
-        self.buf_len = size
+    def __init__(self, max_len):
+        self._q = deque((), max_len)
+        self.max_len = max_len
         self._len = 0
         self.is_data = asyncio.Event()
     
     def add_item(self, item):
         """ add item to the queue, checking queue length """
-        if self._len < self.buf_len:
+        if self._len < self.max_len:
             self._len += 1
             self._q.append(item)
         else:
@@ -70,42 +42,72 @@ class Queue:
         """ number of items in the queue """
         return self._len
 
-    def q_dump(self):
-        """ for testing: print queue contents: destructive! """
-        print('Queue contents:')
-        while self.q_len:
-            item = self.rmv_item()
+
+class UartTR:
+    """ implement UART Tx and Rx as stream """
+    
+    def __init__(self, uart, buf_len, tx_queue, rx_queue):
+        self.uart = uart
+        self.buf_len = buf_len
+        self.tx_queue = tx_queue
+        self.rx_queue = rx_queue
+        self.s_writer = asyncio.StreamWriter(self.uart, {})
+        self.s_reader = asyncio.StreamReader(self.uart)
+        self.in_buf = bytearray(buf_len)
+        self.data_ev = asyncio.Event()
+
+    async def sender(self):
+        """ send out data item """
+        print('In sender()')
+        while True:
+            if self.tx_queue.is_data.is_set():
+                self.s_writer.write(self.tx_queue.rmv_item())
+                await self.s_writer.drain()
+                print('Tx')
+            await asyncio.sleep_ms(20)
+
+    async def receiver(self):
+        """ read data stream into buffer """
+        while True:
+            res = await self.s_reader.readinto(self.in_buf)
+            if res == self.buf_len:
+                # add copied bytearray
+                self.rx_queue.add_item(bytearray(self.in_buf))
+                self.data_ev.set()
+                print('Rx')
+            await asyncio.sleep_ms(20)
+
+
+async def main():
+    
+    def q_dump(q_, name=''):
+        """ destructive! : print queue contents:  """
+        print(f'{name} queue contents:')
+        while q_.q_len:
+            item = q_.rmv_item()
             print(hex_.byte_array_str(item))
 
-
-async def data_consumer(uart_tr_):
-    """ eventually: test for consumption of Rx data """
-    while True:
-        await uart_tr_.data_ev.wait()
-        # print('Buffer length:', uart_tr_.rx_queue.q_len)
-        await asyncio.sleep_ms(200)
-    
-    
-async def main():
     data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
-    # tx_q = Queue(20)
+    tx_q = Queue(20)
     rx_q = Queue(20)
-    uart = UART(0, 9600)
-    uart.init(tx=Pin(0), rx=Pin(1))
-    uart_tr = UartTR(uart, 10, rx_q)
-    
-    task1 = asyncio.create_task(uart_tr.receiver())
-    task2 = asyncio.create_task(data_consumer(uart_tr))
     for i in range(10):
         data[0] = i
-        print('Send:', hex_.byte_array_str(data))
-        await uart_tr.sender(data)
+        tx_q.add_item(bytearray(data))
+
+    uart = UART(0, 9600)
+    uart.init(tx=Pin(0), rx=Pin(1))
+    uart_tr = UartTR(uart, 10, tx_q, rx_q)
+    
+    task0 = asyncio.create_task(uart_tr.receiver())
+    task1 = asyncio.create_task(uart_tr.sender())
+
     print()
 
-    await asyncio.sleep_ms(1000)
+    await asyncio.sleep_ms(5000)
     task1.cancel()
-    #task2.cancel()
-    uart_tr.rx_queue.q_dump()
+    task0.cancel()
+    q_dump(uart_tr.rx_queue, 'Receive')
+
     await asyncio.sleep_ms(200)
 
 
