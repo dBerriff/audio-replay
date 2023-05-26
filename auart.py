@@ -58,7 +58,6 @@ class UartTR:
 
     async def sender(self):
         """ send out data item """
-        print('In sender()')
         while True:
             if self.tx_queue.is_data.is_set():
                 self.s_writer.write(self.tx_queue.rmv_item())
