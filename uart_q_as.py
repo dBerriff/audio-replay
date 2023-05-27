@@ -61,7 +61,7 @@ class UartTR:
         self.data_ev = asyncio.Event()
 
     async def sender(self):
-        """ send out data item """
+        """ coro: send out data item """
         while True:
             if self.tx_queue.is_data.is_set():
                 self.s_writer.write(self.tx_queue.rmv_item())
@@ -69,7 +69,7 @@ class UartTR:
             await asyncio.sleep_ms(20)
 
     async def receiver(self):
-        """ read data stream into buffer """
+        """ coro: read data stream into buffer """
         while True:
             res = await self.s_reader.readinto(self.in_buf)
             if res == self.buf_len:
@@ -80,7 +80,8 @@ class UartTR:
 
 
 async def main():
-    
+    """ coro: test module classes """
+
     def q_dump(q_, name=''):
         """ destructive! : print queue contents:  """
         print(f'{name}queue contents:')

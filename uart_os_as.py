@@ -12,6 +12,7 @@
 import uasyncio as asyncio
 from machine import UART, Pin
 from collections import deque
+from machine import Pin
 import hex_fns as hex_
 
 
@@ -62,13 +63,13 @@ class UartTR:
         self.data_ev = asyncio.Event()
 
     async def sender(self, data, wait_ms=0):
-        """ send out data item """
+        """ coro: send out data item """
         self.s_writer.write(data)
         await self.s_writer.drain()
         await asyncio.sleep_ms(wait_ms)
 
     async def receiver(self):
-        """ read data stream into buffer """
+        """ coro: read data stream into buffer """
         while True:
             res = await self.s_reader.readinto(self.in_buf)
             if res == self.buf_len:
@@ -78,7 +79,23 @@ class UartTR:
             await asyncio.sleep_ms(20)
 
 
+async def blink():
+    """ coro: blink onboard LED """
+    led = Pin('LED', Pin.OUT)
+    while True:
+        led.value(1)
+        await asyncio.sleep_ms(200)
+        led.value(0)
+        await asyncio.sleep_ms(500)
+        
+def led_off():
+    """ turn off onboard LED """
+    led = Pin('LED', Pin.OUT)
+    led.value(0)
+
+
 async def main():
+    """ coro: test module classes """
     
     def q_dump(q_, name=''):
         """ destructive! : print queue contents:  """
@@ -93,14 +110,18 @@ async def main():
     uart.init(tx=Pin(0), rx=Pin(1))
     uart_tr = UartTR(uart, 10, Queue(20))
     task0 = asyncio.create_task(uart_tr.receiver())
+    # run blink as demonstration additional task
+    task1 = asyncio.create_task(blink())
     
     for i in range(10):
         print(f'{i} Tx item')
         data[0] = i
         await uart_tr.sender(data, 200)
 
-    await asyncio.sleep_ms(1000)
+    await asyncio.sleep_ms(5000)
     task0.cancel()
+    task1.cancel()
+    led_off()
     q_dump(uart_tr.rx_queue, 'Receive ')
 
 
