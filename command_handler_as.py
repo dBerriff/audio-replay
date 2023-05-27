@@ -241,7 +241,7 @@ async def main():
     await ch.send_query('q_vol')
     await ch.send_command('playback')
 
-    await asyncio.sleep_ms(5000)
+    await ch.track_end_ev.wait()
     
     print('cancel tasks')
     task1.cancel()
