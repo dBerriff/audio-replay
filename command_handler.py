@@ -1,9 +1,8 @@
-from machine import UART, Pin
 from time import sleep_ms
 import hex_fns as hex_f
 
 
-class UartTxRx(UART):
+class UartTxRx:
     """ UART transmit and receive through fixed-size buffers
         - UART0 maps to pins 0/1, 12/13, 16/17
         - UART1 maps to pins 4/5, 8/9
@@ -13,9 +12,8 @@ class UartTxRx(UART):
 
     baud_rate = const(9600)
     
-    def __init__(self, uart, tx_pin, rx_pin, buf_size):
-        super().__init__(uart, self.baud_rate)
-        self.init(tx=Pin(tx_pin), rx=Pin(rx_pin))
+    def __init__(self, uart, buf_size):
+        self.uart = uart
         self.buf_size = buf_size
         self.tx_buf = bytearray(buf_size)
         self.rx_buf = bytearray(buf_size)
@@ -23,11 +21,11 @@ class UartTxRx(UART):
 
     def write_tx_data(self):
         """ write the Tx buffer to UART """
-        self.write(self.tx_buf)
+        self.uart.write(self.tx_buf)
 
     def read_rx_data(self):
         """ read received data into Rx buffer """
-        rx_bytes = self.readinto(self.rx_buf, self.buf_size)
+        rx_bytes = self.uart.readinto(self.rx_buf, self.buf_size)
         if rx_bytes == self.buf_size:
             self.rx_flag = True
 
@@ -113,9 +111,8 @@ class CommandHandler:
         'flash': 5
     }
 
-    def __init__(self, uart, tx_pin, rx_pin):
-        self.uart_tr = UartTxRx(uart=uart, tx_pin=tx_pin, rx_pin=rx_pin,
-                                buf_size=10)
+    def __init__(self, uart):
+        self.uart_tr = UartTxRx(uart=uart, buf_size=10)
         # pre-load template fixed values
         for key in self.data_template:
             self.uart_tr.tx_buf[key] = self.data_template[key]

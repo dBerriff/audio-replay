@@ -6,6 +6,7 @@
 """
     initial development of uasyncio.Stream UART connection:
     - uses Queues for transmit and receive
+    - coro is short for coroutine
 """
 
 import uasyncio as asyncio
@@ -16,7 +17,7 @@ import hex_fns as hex_
 
 class Queue:
     """
-    implement simple FIFO queue from deque for efficiency
+    implement simple FIFO queue using deque for efficiency
     """
 
     def __init__(self, max_len):
@@ -105,6 +106,8 @@ async def main():
     await asyncio.sleep_ms(1000)
     task1.cancel()
     task0.cancel()
+
+    # demonstrate that items have been added to the queue
     q_dump(uart_tr.rx_queue, 'Receive ')
 
 

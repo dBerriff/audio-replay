@@ -7,6 +7,7 @@
     initial development of uasyncio.Stream UART connection:
     - uses Queue for receive stream
     - uses 'one-shot' send for transmit
+    - coro is short for coroutine
 """
 
 import uasyncio as asyncio
@@ -19,7 +20,7 @@ import hex_fns as hex_
 class Queue:
     """
     implement simple FIFO queue (of bytearray)
-    from deque for efficiency
+    using deque for efficiency
     """
 
     def __init__(self, max_len):
@@ -110,19 +111,21 @@ async def main():
     uart.init(tx=Pin(0), rx=Pin(1))
     uart_tr = UartTR(uart, 10, Queue(20))
     task0 = asyncio.create_task(uart_tr.receiver())
-    # run blink as demonstration additional task
+    # run blink as demonstration of additional task
     task1 = asyncio.create_task(blink())
     
     for i in range(10):
-        print(f'{i} Tx item')
         data[0] = i
-        await uart_tr.sender(data, 200)
+        await uart_tr.sender(data, 20)
+        print(f'{i} Tx item')
 
-    await asyncio.sleep_ms(5000)
+    await asyncio.sleep_ms(1000)
     task0.cancel()
     task1.cancel()
     led_off()
-    q_dump(uart_tr.rx_queue, 'Receive ')
+
+    # demonstrate that items have been added to the queue
+    q_dump(uart_tr.rx_queue, name='Receive ')
 
 
 if __name__ == '__main__':

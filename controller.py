@@ -1,3 +1,4 @@
+from machine import UART, Pin
 from time import sleep_ms
 import _thread as thread
 from command_handler import CommandHandler
@@ -6,9 +7,8 @@ from command_handler import CommandHandler
 class Controller:
     """ control DFPlayer"""
 
-    def __init__(self, uart, tx_pin, rx_pin):
-        self.cmd_handler = CommandHandler(
-            uart=uart, tx_pin=tx_pin, rx_pin=rx_pin)
+    def __init__(self, uart):
+        self.cmd_handler = CommandHandler(uart)
 
     # DFPlayer commands
 
@@ -136,14 +136,17 @@ class Controller:
 
 def main():
     """ test Controller, CommandHandler and UartTxRx """
+    
+    uart = UART(0, 9600)
+    uart.init(tx=Pin(0), rx=Pin(1))
 
-    controller = Controller(uart=0, tx_pin=0, rx_pin=1)
+    controller = Controller(uart)
     # run cmd_handler Rx on second core
     thread.start_new_thread(controller.cmd_handler.consume_rx_data, ())
     
     controller.dfp_init(vol=15)
     controller.set_eq(5)
-    #controller.repeat_play()
+    # controller.repeat_play()
     controller.playback()
     controller.wait()
     for i in range(5):

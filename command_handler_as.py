@@ -1,47 +1,70 @@
 from machine import UART, Pin
+from collections import deque
 import uasyncio as asyncio
-from time import sleep_ms
-import hex_fns as hex_f
+import hex_fns as hex_
 
 
-class UartTxRx:
-    """ UART transmit and receive through fixed-size buffers
-        - UART0 maps to pins 0/1, 12/13, 16/17
-        - UART1 maps to pins 4/5, 8/9
-        - inheritance appears to create problems with StreamWriter
+class Queue:
+    """
+    implement simple FIFO queue (of bytearray)
+    using deque for efficiency
     """
 
-    # buffer size and indices
+    def __init__(self, max_len):
+        self._q = deque((), max_len)
+        self.max_len = max_len
+        self._len = 0
+        self.is_data = asyncio.Event()
 
-    baud_rate = const(9600)
-    
-    def __init__(self, uart, tx_pin, rx_pin, buf_size,
-                 parser_ready_ev):
-        self.uart = UART(0, 9600)
-        self.uart.init(tx=Pin(0), rx=Pin(1))
-        self.buf_size = buf_size
-        self.parser_ready_ev = parser_ready_ev
-        self.rx_ev = asyncio.Event()
-        self.tx_buf = bytearray(buf_size)
-        self.rx_buf = bytearray(buf_size)
-        self.swriter = asyncio.StreamWriter(self.uart, {})
-        self.sreader = asyncio.StreamReader(self.uart)
-        self.rx_ev = asyncio.Event()
+    def add_item(self, item):
+        """ add item to the queue, checking queue length """
+        if self._len < self.max_len:
+            self._len += 1
+            self._q.append(item)
+        else:
+            print('Queue overflow')
+        self.is_data.set()
 
-    async def write_tx_data(self):
-        """ write the Tx buffer to UART """
-        self.swriter.write(self.tx_buf)
-        await self.swriter.drain()
+    def rmv_item(self):
+        """ remove item from the queue """
+        self._len -= 1
+        if self._len == 0:
+            self.is_data.clear()
+        return self._q.popleft()
 
-    async def read_rx_data(self):
-        """ read data word into Rx buffer
-            - when parser is ready """
+    @property
+    def q_len(self):
+        """ number of items in the queue """
+        return self._len
+
+
+class UartTR:
+    """ implement UART Tx and Rx as stream """
+
+    def __init__(self, uart, buf_len, rx_queue):
+        self.uart = uart
+        self.buf_len = buf_len
+        self.rx_queue = rx_queue
+        self.s_writer = asyncio.StreamWriter(self.uart, {})
+        self.s_reader = asyncio.StreamReader(self.uart)
+        self.in_buf = bytearray(buf_len)
+        self.data_ev = asyncio.Event()
+
+    async def sender(self, data, wait_ms=0):
+        """ coro: send out data item """
+        self.s_writer.write(data)
+        await self.s_writer.drain()
+        await asyncio.sleep_ms(wait_ms)
+
+    async def receiver(self):
+        """ coro: read data stream into buffer """
         while True:
-            await self.parser_ready_ev.wait()
-            self.rx_ev.clear()
-            res = await self.sreader.readinto(self.rx_buf)
-            if res == self.buf_size:  # complete data word?
-                self.rx_ev.set()  # data received
+            res = await self.s_reader.readinto(self.in_buf)
+            if res == self.buf_len:
+                # add copied bytearray
+                self.rx_queue.add_item(bytearray(self.in_buf))
+                self.data_ev.set()
+            await asyncio.sleep_ms(20)
 
 
 class CommandHandler:
@@ -93,19 +116,18 @@ class CommandHandler:
     
     play_set = {'next', 'prev', 'track', 'playback'}
 
-    def __init__(self, uart, tx_pin, rx_pin):
-        self.parser_ready_ev = asyncio.Event()
-        self.uart_tr = UartTxRx(uart=uart, tx_pin=tx_pin, rx_pin=rx_pin,
-                                buf_size=10, parser_ready_ev=self.parser_ready_ev)
+    def __init__(self, stream):
+        self.stream = stream
+        self.tx_word = bytearray(self.BUF_SIZE)
+        self.rx_word = bytearray(self.BUF_SIZE)
+        self.rx_queue = Queue(15)
         # pre-load template fixed values
         for key in self.data_template:
-            self.uart_tr.tx_buf[key] = self.data_template[key]
+            self.tx_word[key] = self.data_template[key]
+        self.parser_ready_ev = asyncio.Event()
         self.rx_fn = ''
-        self.rx_data = None
         self.track_count = 0
         self.current_track = 0
-        self.tx_buf = self.uart_tr.tx_buf
-        self.rx_buf = self.uart_tr.rx_buf
         self.track_playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
         self.verbose = False
@@ -113,7 +135,7 @@ class CommandHandler:
 
     def print_tx_message(self):
         """ print bytearray """
-        message = self.tx_buf
+        message = self.tx_word
         if self.verbose:
             print('Tx:', hex_f.byte_array_str(message))
         print('Tx:', self.hex_cmd[message[self.CMD]],
@@ -122,17 +144,17 @@ class CommandHandler:
 
     def print_rx_message(self):
         """ print bytearray """
-        message = self.rx_buf
+        message = self.rx_word
         if self.verbose:
             print('Rx:', hex_f.byte_array_str(message))
         print('Rx:', self.hex_cmd[message[self.CMD]],
-              hex_f.byte_str(message[self.P_H]),
-              hex_f.byte_str(message[self.P_L]))
+              hex_.byte_str(message[self.P_H]),
+              hex_.byte_str(message[self.P_L]))
 
     def get_checksum(self):
         """ return the 2's complement checksum of:
             - bytes 1 to 6 """
-        return hex_f.slice_reg16(-sum(self.tx_buf[1:7]))
+        return hex_.slice_reg16(-sum(self.tx_word[1:7]))
 
     def check_checksum(self, buf_):
         """ returns 0 for consistent checksum """
@@ -141,21 +163,21 @@ class CommandHandler:
         checksum_ += buf_[self.C_L]  # lsb
         return (byte_sum + checksum_) & 0xffff
 
-    async def send_command(self, cmd, param=0):
+    async def send_command(self, cmd, param=0, wait_ms=20):
         """ set tx bytearray values and send
             - commands set own timing """
         print('send_command:', cmd, param)
-        self.tx_buf[self.CMD] = self.cmd_hex[cmd]
-        msb, lsb = hex_f.slice_reg16(param)
-        self.tx_buf[self.P_H] = msb
-        self.tx_buf[self.P_L] = lsb
+        self.tx_word[self.CMD] = self.cmd_hex[cmd]
+        msb, lsb = hex_.slice_reg16(param)
+        self.tx_word[self.P_H] = msb
+        self.tx_word[self.P_L] = lsb
         msb, lsb = self.get_checksum()
-        self.tx_buf[self.C_H] = msb
-        self.tx_buf[self.C_L] = lsb
+        self.tx_word[self.C_H] = msb
+        self.tx_word[self.C_L] = lsb
         if cmd in self.play_set:
             self.track_playing_ev.set()
             self.track_end_ev.clear()
-        await self.uart_tr.write_tx_data()
+        await self.stream.sender(self.tx_word, wait_ms)
     
     async def send_query(self, query: str, param=0):
         """ send query to device and pause for reply """
@@ -164,7 +186,7 @@ class CommandHandler:
         await asyncio.sleep_ms(500)
 
     async def consume_rx_data(self):
-        """ waits for data event; parses and prints received data """
+        """ waits for then parses and prints queued data """
 
         def parse_rx_message(message_):
             """ parse incoming message parameters and
@@ -174,70 +196,56 @@ class CommandHandler:
             self.rx_fn = rx_fn
 
             if rx_fn == 'tf_finish':
-                self.prev_track = hex_f.set_reg16(
+                self.prev_track = hex_.set_reg16(
                     message_[self.P_H], message_[self.P_L])
                 self.track_playing_ev.clear()
                 self.track_end_ev.set()
             elif rx_fn == 'q_init':
-                self.init_param = hex_f.set_reg16(
+                self.init_param = hex_.set_reg16(
                     message_[self.P_H], message_[self.P_L])
                 self.tf_online = bool(self.init_param & 0x02)
             elif rx_fn == 're_tx':
                 self.re_tx_ev = True  # not currently checked
             elif rx_fn == 'q_vol':
-                self.volume = hex_f.set_reg16(
+                self.volume = hex_.set_reg16(
                     message_[self.P_H], message_[self.P_L])
             elif rx_fn == 'q_tf_files':
-                self.track_count = hex_f.set_reg16(
+                self.track_count = hex_.set_reg16(
                     message_[self.P_H], message_[self.P_L])
             elif rx_fn == 'q_tf_track':
-                self.current_track = hex_f.set_reg16(
+                self.current_track = hex_.set_reg16(
                     message_[self.P_H], message_[self.P_L])
 
         while True:
             self.parser_ready_ev.set()  # set parser ready for input
-            await self.uart_tr.rx_ev.wait()  # wait for data input
-            self.parser_ready_ev.clear()  # clear while busy
-            self.rx_data = bytearray(self.rx_buf)
-            parse_rx_message(self.rx_data)
+            await self.stream.rx_queue.is_data.wait()  # wait for data input
+            self.rx_word = self.stream.rx_queue.rmv_item()
+            parse_rx_message(self.rx_word)
             self.print_rx_message()
-
-
-async def blink():
-    """ blink onboard LED """
-    from machine import Pin
-    led = Pin(16, Pin.OUT)
-    while True:
-        led.value(1)
-        await asyncio.sleep_ms(1000)
-        led.value(0)
-        await asyncio.sleep_ms(1000)
 
 
 async def main():
     """ test CommandHandler and UartTxRx """
-    ch = CommandHandler(0, 0, 1)
-    print(ch)
-    task0 = asyncio.create_task(blink())
+
+    uart = UART(0, 9600)
+    uart.init(tx=Pin(0), rx=Pin(1))
+    uart_tr = UartTR(uart, 10, Queue(20))
+    ch = CommandHandler(uart_tr)
+    
+    task0 = asyncio.create_task(uart_tr.receiver())
     task1 = asyncio.create_task(ch.consume_rx_data())
-    task2 = asyncio.create_task(ch.uart_tr.read_rx_data())
-    await ch.send_command('reset')
-    await asyncio.sleep_ms(3000)
+
+    await ch.send_command('reset', 0, wait_ms=3000)
     await ch.send_command('vol_set', 15)
     await asyncio.sleep_ms(2000)
     await ch.send_query('q_vol')
     await ch.send_command('playback')
-    print('track playing:', ch.track_playing_ev.is_set())
-    await ch.track_end_ev.wait()
-    for i in range(3):
-        await ch.send_command('next')
-        await ch.track_end_ev.wait()
-    print('final track ended:', ch.track_end_ev.is_set())
-    await asyncio.sleep_ms(1000)
+
+    await asyncio.sleep_ms(5000)
+    
     print('cancel tasks')
-    task0.cancel()
     task1.cancel()
-    task2.cancel()
+    task0.cancel()
 
 
 if __name__ == '__main__':
