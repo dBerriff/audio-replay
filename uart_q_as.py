@@ -11,41 +11,8 @@
 
 import uasyncio as asyncio
 from machine import UART, Pin
-from collections import deque
+from uart_os_as import Queue
 import hex_fns as hex_
-
-
-class Queue:
-    """
-    implement simple FIFO queue using deque for efficiency
-    """
-
-    def __init__(self, max_len):
-        self.max_len = max_len
-        self._q = deque((), max_len)
-        self._len = 0
-        self.is_data = asyncio.Event()
-    
-    def add_item(self, item):
-        """ add item to the queue, checking queue length """
-        if self._len < self.max_len:
-            self._len += 1
-            self._q.append(item)
-        else:
-            print('Queue overflow')
-        self.is_data.set()
-            
-    def rmv_item(self):
-        """ remove item from the queue """
-        self._len -= 1
-        if self._len == 0:
-            self.is_data.clear()
-        return self._q.popleft()
-    
-    @property
-    def q_len(self):
-        """ number of items in the queue """
-        return self._len
 
 
 class UartTR:
@@ -65,7 +32,8 @@ class UartTR:
         """ coro: send out data item """
         while True:
             if self.tx_queue.is_data.is_set():
-                self.s_writer.write(self.tx_queue.rmv_item())
+                item = self.tx_queue.rmv_item()
+                self.s_writer.write(item)
                 await self.s_writer.drain()
             await asyncio.sleep_ms(20)
 

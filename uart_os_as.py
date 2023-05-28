@@ -18,17 +18,15 @@ import hex_fns as hex_
 
 
 class Queue:
-    """
-    implement simple FIFO queue (of bytearray)
-    using deque for efficiency
-    """
+    """ simple FIFO queue """
 
     def __init__(self, max_len):
-        self._q = deque((), max_len)
         self.max_len = max_len
+        # use deque for efficiency
+        self._q = deque((), max_len)
         self._len = 0
         self.is_data = asyncio.Event()
-    
+
     def add_item(self, item):
         """ add item to the queue, checking queue length """
         if self._len < self.max_len:
@@ -37,37 +35,40 @@ class Queue:
         else:
             print('Queue overflow')
         self.is_data.set()
-            
+
     def rmv_item(self):
-        """ remove item from the queue """
-        self._len -= 1
+        """ remove item from the queue if not empty """
+        if self._len > 0:
+            self._len -= 1
+            item = self._q.popleft()
+        else:
+            item = None
         if self._len == 0:
             self.is_data.clear()
-        return self._q.popleft()
-    
+        return item
+
     @property
     def q_len(self):
         """ number of items in the queue """
         return self._len
 
 
-class UartTR:
+class StreamTR:
     """ implement UART Tx and Rx as stream """
-    
-    def __init__(self, uart, buf_len, rx_queue):
-        self.uart = uart
+
+    def __init__(self, stream, buf_len, rx_queue):
+        self.stream = stream
         self.buf_len = buf_len
         self.rx_queue = rx_queue
-        self.s_writer = asyncio.StreamWriter(self.uart, {})
-        self.s_reader = asyncio.StreamReader(self.uart)
+        self.s_writer = asyncio.StreamWriter(self.stream, {})
+        self.s_reader = asyncio.StreamReader(self.stream)
         self.in_buf = bytearray(buf_len)
         self.data_ev = asyncio.Event()
 
-    async def sender(self, data, wait_ms=0):
+    async def sender(self, data):
         """ coro: send out data item """
         self.s_writer.write(data)
         await self.s_writer.drain()
-        await asyncio.sleep_ms(wait_ms)
 
     async def receiver(self):
         """ coro: read data stream into buffer """
@@ -89,6 +90,7 @@ async def blink():
         led.value(0)
         await asyncio.sleep_ms(500)
         
+
 def led_off():
     """ turn off onboard LED """
     led = Pin('LED', Pin.OUT)
@@ -109,14 +111,14 @@ async def main():
     
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
-    uart_tr = UartTR(uart, 10, Queue(20))
-    task0 = asyncio.create_task(uart_tr.receiver())
+    stream_tr = StreamTR(uart, 10, Queue(20))
+    task0 = asyncio.create_task(stream_tr.receiver())
     # run blink as demonstration of additional task
     task1 = asyncio.create_task(blink())
     
     for i in range(10):
         data[0] = i
-        await uart_tr.sender(data, 20)
+        await stream_tr.sender(data)
         print(f'{i} Tx item')
 
     await asyncio.sleep_ms(1000)
@@ -125,7 +127,7 @@ async def main():
     led_off()
 
     # demonstrate that items have been added to the queue
-    q_dump(uart_tr.rx_queue, name='Receive ')
+    q_dump(stream_tr.rx_queue, name='Receive ')
 
 
 if __name__ == '__main__':

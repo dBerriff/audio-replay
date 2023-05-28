@@ -1,6 +1,6 @@
 import uasyncio as asyncio
 from machine import UART, Pin
-from command_handler_as import Queue, UartTR, CommandHandler
+from command_handler_as import Queue, StreamTR, CommandHandler
 import _thread as thread
 
 
@@ -9,7 +9,7 @@ class Controller:
 
     def __init__(self, uart):
         self.uart = uart
-        self.uart_tr = UartTR(uart, 10, Queue(20))
+        self.uart_tr = StreamTR(uart, 10, Queue(20))
         self.c_h = CommandHandler(self.uart_tr)
         self.playing = self.c_h.track_playing_ev
         self.folder = None
@@ -133,9 +133,9 @@ class Controller:
     async def dfp_init(self, vol):
         """ initialisation commands """
         await self.reset()
-        await self.c_h.send_query('q_tf_files')
+        await self.c_h.send_command('q_tf_files')
         await self.set_volume(vol)
-        await self.c_h.send_query('q_vol')
+        await self.c_h.send_command('q_vol')
         self.playing.clear()
 
 
