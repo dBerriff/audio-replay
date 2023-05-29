@@ -18,14 +18,14 @@ class CommandHandler:
     C_H = const(7)  # checksum
     C_L = const(8)
 
-    R_FB = const(0)  # require player feedback? 0 or 1
+    R_FB = const(1)  # require player feedback? 0 or 1
     R_VERBOSE = const(False)  # print out data as hex bytearray
     
     WAIT_MS = const(200)
 
     data_template = {0: 0x7E, 1: 0xFF, 2: 0x06, 4: R_FB, 9: 0xEF}
     
-    hex_cmd = {
+    hex_str = {
         0x01: 'next',
         0x02: 'prev',
         0x03: 'track',  # 1-3000
@@ -36,13 +36,13 @@ class CommandHandler:
         0x08: 'repeat_trk',  # track # as parameter; 3.6.3
         0x0c: 'reset',
         0x0d: 'play',
-        0x0e: 'pause',  # need timeout!
+        0x0e: 'stop',  # need timeout!
         0x0f: 'folder_trk',  # play: MSB: folder; LSB: track
-        0x11: 'repeat_root',  # root folder; 0: stop; 1: start
+        0x11: 'repeat_all',  # root folder; 0: stop; 1: start
         0x3d: 'tf_finish',
         0x3f: 'q_init',  # 01: U-disk, 02: TF-card, 04: PC, 08: Flash
         0x40: 'error',
-        0x41: 'feedback',
+        0x41: 'ack',
         0x42: 'q_status',  # 0: stopped; 1: playing; 2: paused
         0x43: 'q_vol',
         0x44: 'q_eq',
@@ -50,17 +50,22 @@ class CommandHandler:
         0x4c: 'q_tf_trk'
         }
     
-    hex_wait_ms = {0x0c: 3000}
-    
     # inverse dictionary mapping
-    cmd_hex = {value: key for key, value in hex_cmd.items()}
+    str_hex = {value: key for key, value in hex_str.items()}
+
+    # add return codes
+    hex_str[0x3a] = 'media_insert'
+    hex_str[0x3b] = 'media_remove'
+
     
-    play_set = {'next', 'prev', 'track', 'repeat_trk', 'playback'}
+    play_set = {'next', 'prev', 'track', 'repeat_trk', 'play',
+                'folder_track', 'repeat_all'}
 
     def __init__(self, stream):
         self.stream = stream
         self.tx_word = bytearray(self.BUF_SIZE)
         self.rx_word = bytearray(self.BUF_SIZE)
+        self.ack_ev = asyncio.Event()
         # pre-load template fixed values
         for key in self.data_template:
             self.tx_word[key] = self.data_template[key]
@@ -78,7 +83,7 @@ class CommandHandler:
         message = self.tx_word
         if self.R_VERBOSE:
             print('Tx:', hex_f.byte_array_str(message))
-        print('Tx:', self.hex_cmd[message[self.CMD]],
+        print('Tx:', self.hex_str[message[self.CMD]],
               hex_f.byte_str(message[self.P_H]),
               hex_f.byte_str(message[self.P_L]))
 
@@ -87,7 +92,7 @@ class CommandHandler:
         message = self.rx_word
         if self.R_VERBOSE:
             print('Rx:', hex_f.byte_array_str(message))
-        print('Rx:', self.hex_cmd[message[self.CMD]],
+        print('Rx:', self.hex_str[message[self.CMD]],
               hex_f.set_reg16(message[self.P_H], message[self.P_L]))
 
     def get_checksum(self):
@@ -108,11 +113,8 @@ class CommandHandler:
     async def send_command(self, cmd, param=0):
         """ set tx bytearray values and send
             - commands set own timing """
-        cmd_hex = self.cmd_hex[cmd]
-        if cmd_hex in self.hex_wait_ms:
-            wait_time_ms = self.hex_wait_ms[cmd_hex]
-        else:
-            wait_time_ms = self.WAIT_MS
+        self.ack_ev.clear()
+        cmd_hex = self.str_hex[cmd]
         self.tx_word[self.CMD] = cmd_hex
         msb, lsb = hex_f.slice_reg16(param)
         self.tx_word[self.P_H] = msb
@@ -125,7 +127,8 @@ class CommandHandler:
             self.track_end_ev.clear()
         await self.stream.sender(self.tx_word)
         self.print_tx_message()
-        await asyncio.sleep_ms(wait_time_ms)
+        await self.ack_ev.wait()
+
 
     async def consume_rx_data(self):
         """ waits for then parses and prints queued data """
@@ -134,7 +137,7 @@ class CommandHandler:
             """ parse incoming message parameters and
                 set controller attributes
                 - partial implementation for known requirements """
-            rx_fn = self.hex_cmd[message_[self.CMD]]
+            rx_fn = self.hex_str[message_[self.CMD]]
             self.rx_fn = rx_fn
 
             if rx_fn == 'tf_finish':
@@ -146,6 +149,8 @@ class CommandHandler:
                 self.init_param = hex_f.set_reg16(
                     message_[self.P_H], message_[self.P_L])
                 self.tf_online = bool(self.init_param & 0x02)
+            elif rx_fn == 'ack':
+                self.ack_ev.set()
             elif rx_fn == 're_tx':
                 self.re_tx_ev = True  # not currently checked
             elif rx_fn == 'q_vol':
@@ -166,25 +171,55 @@ class CommandHandler:
             self.print_rx_message()
 
 
+async def busy_pin_state(pin_):
+    """ poll DFPlayer Pin 16 - Busy
+        - low when working, high when standby
+        - 'working' means playing a track
+        - follows LED on DFPlayer?
+        - set Pico onboard LED to On if busy
+    """
+    pin_in = Pin(pin_, Pin.IN, Pin.PULL_UP)
+    led = Pin('LED', Pin.OUT)
+    while True:
+        if pin_in.value():
+            led.value(0)
+        else:
+            led.value(1)
+        await asyncio.sleep_ms(20)
+
+
+
 async def main():
     """ test CommandHandler and UartTxRx """
     
-    async def busy_pin_state(pin_):
-        """ poll DFPlayer Pin 16 - Busy
-            - low when working, high when standby
-            - 'working' means playing a track
-            - follows LED on DFPlayer?
-            - set Pico onboard LED to On if busy
-        """
-        pin_in = Pin(pin_, Pin.IN, Pin.PULL_UP)
-        led = Pin('LED', Pin.OUT)
-        while True:
-            if pin_in.value():
-                led.value(0)
-            else:
-                led.value(1)
-            await asyncio.sleep_ms(20)
-    
+    async def reset():
+        await c_h.send_command('reset', 0)
+        await c_h.ack_ev.wait()
+        await asyncio.sleep_ms(2000)
+
+    async def next_trk():
+        await c_h.send_command('next', 0)
+        await c_h.ack_ev.wait()
+
+    async def prev_trk():
+        await c_h.send_command('prev', 0)
+        await c_h.ack_ev.wait()
+
+    async def play():
+        await c_h.send_command('play', 0)
+        await c_h.ack_ev.wait()
+
+    async def stop():
+        await c_h.send_command('stop', 0)
+        await c_h.ack_ev.wait()
+        c_h.track_playing_ev.clear()
+        c_h.track_end_ev.set()
+
+    async def vol_set(level):
+        level = min(30, level)
+        await c_h.send_command('vol_set', level)
+        await c_h.ack_ev.wait()
+
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
     stream_tr = StreamTR(uart, 10, Queue(20))
@@ -196,24 +231,21 @@ async def main():
     task2 = asyncio.create_task(busy_pin_state(2))
     
     print('Send commands')
-    await c_h.send_command('reset')
-    await c_h.send_command('vol_set', 15)
+    await reset()
+    await vol_set(15)
     await c_h.send_command('q_vol')
-    await c_h.send_command('play')
+    await play()
     await c_h.track_end_ev.wait()
-    await c_h.send_command('next')
+    await next_trk()
     await asyncio.sleep_ms(2000)
-    await c_h.send_command('pause')
-    # to do: avoid 'pause' locking up the system
-    try:
-        await asyncio.wait_for(c_h.track_end_ev.wait(), 10)
-    except asyncio.TimeoutError:
-        print('Pause time exceeded.')
-    await c_h.send_command('play')
+    await stop()
+    
+    await asyncio.sleep_ms(2000)
+    await play()
     await c_h.track_end_ev.wait()
     
     print('cancel tasks')
-    await c_h.send_command('reset')
+    await reset()
 
     task1.cancel()
     task0.cancel()
