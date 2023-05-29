@@ -5,7 +5,10 @@ from uart_os_as import Queue, StreamTR
 
 
 class CommandHandler:
-    """ formats, sends and receives command and query messages """
+    """ formats, sends and receives command and query messages
+        - see Flyron Technology Co documentation for references
+        - www.flyrontech.com
+    """
 
     BUF_SIZE = const(10)
     # data-byte indices
@@ -16,6 +19,7 @@ class CommandHandler:
     C_L = const(8)
 
     R_FB = const(0)  # require player feedback? 0 or 1
+    R_VERBOSE = const(False)  # print out data as hex bytearray
     
     WAIT_MS = const(200)
 
@@ -24,30 +28,26 @@ class CommandHandler:
     hex_cmd = {
         0x01: 'next',
         0x02: 'prev',
-        0x03: 'track',  # 0-2999 (? 1-2999)
+        0x03: 'track',  # 1-3000
         0x04: 'vol_inc',
         0x05: 'vol_dec',
         0x06: 'vol_set',  # 0-30
-        0x07: 'eq_set',  # normal/pop/rock/jazz/classic/bass
-        0x08: 'playback_mode',  # repeat/folder-repeat/single-repeat/random
-        0x09: 'play_src',  # u/tf/aux/sleep/flash 1/2/3/4/5
+        0x07: 'eq_set',  # 0:normal/1:pop/2:rock/3:jazz/4:classic/5:bass
+        0x08: 'repeat_trk',  # track # as parameter; 3.6.3
         0x0c: 'reset',
-        0x0d: 'playback',
-        0x0e: 'pause',
-        0x0f: 'folder',  # 1-10
-        0x11: 'repeat_play',  # 0: stop; 1: start
+        0x0d: 'play',
+        0x0e: 'pause',  # need timeout!
+        0x0f: 'folder_trk',  # play: MSB: folder; LSB: track
+        0x11: 'repeat_root',  # root folder; 0: stop; 1: start
         0x3d: 'tf_finish',
         0x3f: 'q_init',  # 01: U-disk, 02: TF-card, 04: PC, 08: Flash
-        0x40: 're_tx',
-        0x41: 'reply',
-        0x42: 'q_status',
+        0x40: 'error',
+        0x41: 'feedback',
+        0x42: 'q_status',  # 0: stopped; 1: playing; 2: paused
         0x43: 'q_vol',
         0x44: 'q_eq',
-        0x45: 'q_mode',
-        0x46: 'q_version',
-        0x48: 'q_tf_files',
-        0x4a: 'keep_on',  # not understood
-        0x4c: 'q_tf_track',
+        0x48: 'q_tf_files',  # in root directory
+        0x4c: 'q_tf_trk'
         }
     
     hex_wait_ms = {0x0c: 3000}
@@ -55,7 +55,7 @@ class CommandHandler:
     # inverse dictionary mapping
     cmd_hex = {value: key for key, value in hex_cmd.items()}
     
-    play_set = {'next', 'prev', 'track', 'playback'}
+    play_set = {'next', 'prev', 'track', 'repeat_trk', 'playback'}
 
     def __init__(self, stream):
         self.stream = stream
@@ -70,13 +70,13 @@ class CommandHandler:
         self.current_track = 0
         self.track_playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
-        self.verbose = False
+        self.verbose = True
         self.tf_online = False
 
     def print_tx_message(self):
         """ print bytearray """
         message = self.tx_word
-        if self.verbose:
+        if self.R_VERBOSE:
             print('Tx:', hex_f.byte_array_str(message))
         print('Tx:', self.hex_cmd[message[self.CMD]],
               hex_f.byte_str(message[self.P_H]),
@@ -85,7 +85,7 @@ class CommandHandler:
     def print_rx_message(self):
         """ print bytearray """
         message = self.rx_word
-        if self.verbose:
+        if self.R_VERBOSE:
             print('Rx:', hex_f.byte_array_str(message))
         print('Rx:', self.hex_cmd[message[self.CMD]],
               hex_f.set_reg16(message[self.P_H], message[self.P_L]))
@@ -199,12 +199,22 @@ async def main():
     await c_h.send_command('reset')
     await c_h.send_command('vol_set', 15)
     await c_h.send_command('q_vol')
-    await c_h.send_command('playback')
+    await c_h.send_command('play')
     await c_h.track_end_ev.wait()
     await c_h.send_command('next')
+    await asyncio.sleep_ms(2000)
+    await c_h.send_command('pause')
+    # to do: avoid 'pause' locking up the system
+    try:
+        await asyncio.wait_for(c_h.track_end_ev.wait(), 10)
+    except asyncio.TimeoutError:
+        print('Pause time exceeded.')
+    await c_h.send_command('play')
     await c_h.track_end_ev.wait()
     
     print('cancel tasks')
+    await c_h.send_command('reset')
+
     task1.cancel()
     task0.cancel()
     await asyncio.sleep_ms(1000)
