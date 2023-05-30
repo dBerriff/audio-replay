@@ -18,9 +18,7 @@ class CommandHandler:
     C_H = const(7)  # checksum
     C_L = const(8)
 
-    R_FB = const(1)  # require player feedback? 0 or 1
-    R_VERBOSE = const(False)  # print out data as hex bytearray
-    
+    R_FB = const(1)  # require ACK feedback
     WAIT_MS = const(200)
 
     data_template = {0: 0x7E, 1: 0xFF, 2: 0x06, 4: R_FB, 9: 0xEF}
@@ -36,18 +34,20 @@ class CommandHandler:
         0x08: 'repeat_trk',  # track # as parameter; 3.6.3
         0x0c: 'reset',
         0x0d: 'play',
-        0x0e: 'stop',  # need timeout!
+        0x0e: 'stop',
         0x0f: 'folder_trk',  # play: MSB: folder; LSB: track
         0x11: 'repeat_all',  # root folder; 0: stop; 1: start
-        0x3d: 'tf_finish',
-        0x3f: 'q_init',  # 01: U-disk, 02: TF-card, 04: PC, 08: Flash
+        0x3a: 'media_insert',
+        0x3b: 'media_remove',
+        0x3d: 'sd_fin',
+        0x3f: 'q_init',  # 02: SD-card
         0x40: 'error',
         0x41: 'ack',
         0x42: 'q_status',  # 0: stopped; 1: playing; 2: paused
         0x43: 'q_vol',
         0x44: 'q_eq',
-        0x48: 'q_tf_files',  # in root directory
-        0x4c: 'q_tf_trk'
+        0x48: 'q_sd_files',  # in root directory
+        0x4c: 'q_sd_trk'
         }
     
     # inverse dictionary mapping
@@ -57,7 +57,6 @@ class CommandHandler:
     hex_str[0x3a] = 'media_insert'
     hex_str[0x3b] = 'media_remove'
 
-    
     play_set = {'next', 'prev', 'track', 'repeat_trk', 'play',
                 'folder_track', 'repeat_all'}
 
@@ -70,38 +69,30 @@ class CommandHandler:
         for key in self.data_template:
             self.tx_word[key] = self.data_template[key]
         self.parser_ready_ev = asyncio.Event()
-        self.rx_fn = ''
+        self.rx_cmd = 0x00
+        self.rx_param = 0x0000
         self.track_count = 0
         self.current_track = 0
         self.track_playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
+        self.error_ev = asyncio.Event()
+
         self.verbose = True
-        self.tf_online = False
+        self.sd_online = False
 
     def print_tx_message(self):
         """ print bytearray """
         message = self.tx_word
-        if self.R_VERBOSE:
-            print('Tx:', hex_f.byte_array_str(message))
-        print('Tx:', self.hex_str[message[self.CMD]],
-              hex_f.byte_str(message[self.P_H]),
-              hex_f.byte_str(message[self.P_L]))
-
-    def print_rx_message(self):
-        """ print bytearray """
-        message = self.rx_word
-        if self.R_VERBOSE:
-            print('Rx:', hex_f.byte_array_str(message))
-        print('Rx:', self.hex_str[message[self.CMD]],
-              hex_f.set_reg16(message[self.P_H], message[self.P_L]))
+        cmd = message[self.CMD]
+        print('tx:',
+              self.hex_str[cmd],
+              hex_f.byte_str(cmd),
+              hex_f.set_reg16_str(message[self.P_H], message[self.P_L]))
 
     def get_checksum(self):
         """ return the 2's complement checksum of:
             - bytes 1 to 6 """
-        # following algorithm at 3.2 in Flyron Tech documentation
-        checksum = hex_f.slice_reg16(
-            (0xffff - sum(self.tx_word[1:7])) + 1)
-        return checksum
+        return hex_f.slice_reg16(-sum(self.tx_word[1:7]))
 
     def check_checksum(self, buf_):
         """ returns 0 for consistent checksum """
@@ -113,22 +104,18 @@ class CommandHandler:
     async def send_command(self, cmd, param=0):
         """ set tx bytearray values and send
             - commands set own timing """
-        self.ack_ev.clear()
-        cmd_hex = self.str_hex[cmd]
-        self.tx_word[self.CMD] = cmd_hex
-        msb, lsb = hex_f.slice_reg16(param)
-        self.tx_word[self.P_H] = msb
-        self.tx_word[self.P_L] = lsb
-        msb, lsb = self.get_checksum()
-        self.tx_word[self.C_H] = msb
-        self.tx_word[self.C_L] = lsb
+        self.ack_ev.clear()  # require ACK
+        self.tx_word[self.CMD] = self.str_hex[cmd]
+        self.tx_word[self.P_H], self.tx_word[self.P_L] = \
+            hex_f.slice_reg16(param)
+        self.tx_word[self.C_H], self.tx_word[self.C_L] = \
+            self.get_checksum()
         if cmd in self.play_set:
             self.track_playing_ev.set()
             self.track_end_ev.clear()
         await self.stream.sender(self.tx_word)
         self.print_tx_message()
         await self.ack_ev.wait()
-
 
     async def consume_rx_data(self):
         """ waits for then parses and prints queued data """
@@ -137,46 +124,53 @@ class CommandHandler:
             """ parse incoming message parameters and
                 set controller attributes
                 - partial implementation for known requirements """
-            rx_fn = self.hex_str[message_[self.CMD]]
-            self.rx_fn = rx_fn
+            rx_str_cmd = self.hex_str[message_[self.CMD]]
+            rx_cmd = self.str_hex[rx_str_cmd]
+            rx_param = hex_f.set_reg16(
+                message_[self.P_H], message_[self.P_L])
 
-            if rx_fn == 'tf_finish':
-                self.prev_track = hex_f.set_reg16(
-                    message_[self.P_H], message_[self.P_L])
+            if rx_cmd == 0x3d:  # sd_finish
+                self.prev_track = self.rx_param
                 self.track_playing_ev.clear()
                 self.track_end_ev.set()
-            elif rx_fn == 'q_init':
-                self.init_param = hex_f.set_reg16(
-                    message_[self.P_H], message_[self.P_L])
-                self.tf_online = bool(self.init_param & 0x02)
-            elif rx_fn == 'ack':
+            elif rx_cmd == 0x3f:  # q_init
+                if rx_param != 0x0002:
+                    raise Exception('DFPlayer error: no SD card?')
+            elif rx_cmd == 0x40:  # error
+                self.error_ev.set()
+            elif rx_cmd == 0x41:  # ack
                 self.ack_ev.set()
-            elif rx_fn == 're_tx':
-                self.re_tx_ev = True  # not currently checked
-            elif rx_fn == 'q_vol':
-                self.volume = hex_f.set_reg16(
-                    message_[self.P_H], message_[self.P_L])
-            elif rx_fn == 'q_tf_files':
-                self.track_count = hex_f.set_reg16(
-                    message_[self.P_H], message_[self.P_L])
-            elif rx_fn == 'q_tf_track':
-                self.current_track = hex_f.set_reg16(
-                    message_[self.P_H], message_[self.P_L])
+            elif rx_cmd == 0x43:  # q_vol
+                self.volume = self.rx_param
+            elif rx_cmd == 0x48:  # q_sd_files
+                self.track_count = self.rx_param
+            elif rx_cmd == 0x4c:  # q_sd_trk
+                self.current_track = self.rx_param
+            elif rx_cmd == 0x3a:  # media_insert
+                pass
+            elif rx_cmd == 0x3b:  # media_remove
+                raise Exception('DFPlayer error: SD card removed!')
+            
+            self.rx_cmd = rx_cmd
+            self.rx_param = rx_param
+            if rx_cmd != 0x41:  # skip ack
+                print('Rx:', rx_str_cmd, hex_f.byte_str(rx_cmd),
+                      hex_f.reg16_str(rx_param))
 
         while True:
             self.parser_ready_ev.set()  # set parser ready for input
             await self.stream.rx_queue.is_data.wait()  # wait for data input
             self.rx_word = self.stream.rx_queue.rmv_item()
             parse_rx_message(self.rx_word)
-            self.print_rx_message()
 
 
 async def busy_pin_state(pin_):
-    """ poll DFPlayer Pin 16 - Busy
-        - low when working, high when standby
-        - 'working' means playing a track
-        - follows LED on DFPlayer?
+    """ poll DFPlayer Pin 16
         - set Pico onboard LED to On if busy
+        - included to show alternative control option
+        - low when working, high when standby
+        - 'working' means playing a track?
+        - follows LED on DFPlayer?
     """
     pin_in = Pin(pin_, Pin.IN, Pin.PULL_UP)
     led = Pin('LED', Pin.OUT)
@@ -188,69 +182,98 @@ async def busy_pin_state(pin_):
         await asyncio.sleep_ms(20)
 
 
-
 async def main():
     """ test CommandHandler and UartTxRx """
     
     async def reset():
+        """ reset the DFPlayer
+            - with SD card response should be:
+                Rx word: q_init 0x3f 0x0002
+                -- signifies online storage: SD card
+                -- not currently checked by software
+        """
         await c_h.send_command('reset', 0)
         await c_h.ack_ev.wait()
         await asyncio.sleep_ms(2000)
 
-    async def next_trk():
-        await c_h.send_command('next', 0)
-        await c_h.ack_ev.wait()
+    async def next_trk(n=1):
+        """ play n next tracks """
+        for _ in range(n):
+            await c_h.send_command('next', 0)
+            await c_h.ack_ev.wait()
+            await c_h.track_end_ev.wait()
 
-    async def prev_trk():
-        await c_h.send_command('prev', 0)
-        await c_h.ack_ev.wait()
+    async def prev_trk(n=1):
+        """ play n previous tracks """
+        for _ in range(n):
+            await c_h.send_command('prev', 0)
+            await c_h.ack_ev.wait()
+            await c_h.track_end_ev.wait()
 
     async def play():
+        """ play track 1 """
         await c_h.send_command('play', 0)
         await c_h.ack_ev.wait()
+        await c_h.track_end_ev.wait()
 
     async def stop():
+        """ stop playing """
         await c_h.send_command('stop', 0)
         await c_h.ack_ev.wait()
         c_h.track_playing_ev.clear()
         c_h.track_end_ev.set()
 
     async def vol_set(level):
+        """ set volume level 0-30 """
         level = min(30, level)
         await c_h.send_command('vol_set', level)
         await c_h.ack_ev.wait()
 
+    async def q_vol():
+        """ query volume level """
+        await c_h.send_command('q_vol')
+        await c_h.ack_ev.wait()
+
+    async def q_sd_files():
+        """ query number of SD files (in root?) """
+        await c_h.send_command('q_sd_files')
+        await c_h.ack_ev.wait()
+
+    async def q_sd_trk():
+        """ query current track number """
+        await c_h.send_command('q_sd_trk')
+        await c_h.ack_ev.wait()
+
+    # streaming object
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
+    # stream transmit / receive object
     stream_tr = StreamTR(uart, 10, Queue(20))
+    # command-handler object
     c_h = CommandHandler(stream_tr)
-    
     # Rx tasks run as cooperative tasks
     task0 = asyncio.create_task(stream_tr.receiver())
     task1 = asyncio.create_task(c_h.consume_rx_data())
+    # demonstrate busy-pin polling - not used for control
     task2 = asyncio.create_task(busy_pin_state(2))
     
     print('Send commands')
     await reset()
     await vol_set(15)
-    await c_h.send_command('q_vol')
+    await q_vol()  # confirm volume setting
+    await q_sd_files()  # return number of files
     await play()
-    await c_h.track_end_ev.wait()
-    await next_trk()
+    await next_trk(2)
+    task3 = asyncio.create_task(play())  # can be stopped
     await asyncio.sleep_ms(2000)
     await stop()
-    
-    await asyncio.sleep_ms(2000)
-    await play()
-    await c_h.track_end_ev.wait()
-    
-    print('cancel tasks')
-    await reset()
 
-    task1.cancel()
-    task0.cancel()
-    await asyncio.sleep_ms(1000)
-    task2.cancel()
+    # demo complete
+    print('cancel tasks')
+    task3.cancel()  # play()
+    task2.cancel()  # DFP busy-pin polling
+    task1.cancel()  # Rx stream
+    task0.cancel()  # parse Rx data
 
 
 if __name__ == '__main__':
