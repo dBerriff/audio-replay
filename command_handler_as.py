@@ -53,14 +53,19 @@ class CommandHandler:
     # inverse dictionary mapping
     str_hex = {value: key for key, value in hex_str.items()}
 
-    # add return codes
+    # add Rx-only codes
     hex_str[0x3a] = 'media_insert'
     hex_str[0x3b] = 'media_remove'
 
-    play_str_set = {'play', 'next', 'prev', 'track', 'folder_trk',
+    # build set of commands that play a track
+    # required to clear the track_end_ev event
+    play_set_str = {'play', 'next', 'prev', 'track', 'folder_trk',
                     'repeat_trk', 'repeat_all'}
-    play_set = {0x0d, 0x01, 0x02, 0x03, 0x0f, 0x08, 0x11}
-    print(play_set)
+    play_set = {0}
+    # set comprehension raises an error
+    for element in play_set_str:
+        play_set.add(str_hex[element])
+    play_set.remove(0)
 
     def __init__(self, stream):
         self.stream = stream
@@ -69,11 +74,10 @@ class CommandHandler:
         # pre-load template fixed values
         for key in self.data_template:
             self.tx_word[key] = self.data_template[key]
-        self.parser_ready_ev = asyncio.Event()
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
-        self.track_count = 0
-        self.current_track = 0
+        self.track_count = 0  # not currently used
+        self.current_track = 0  # not currently used
         self.ack_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
         self.error_ev = asyncio.Event()  # not currently monitored
@@ -108,7 +112,7 @@ class CommandHandler:
         await self.ack_ev.wait()
 
     async def consume_rx_data(self):
-        """ waits for then parses and prints queued data """
+        """ parses and prints queued data """
 
         def parse_rx_message(message_):
             """ parse incoming message parameters and
@@ -147,7 +151,6 @@ class CommandHandler:
                       hex_f.reg16_str(rx_param))
 
         while True:
-            self.parser_ready_ev.set()  # set parser ready for input
             await self.stream.rx_queue.is_data.wait()  # wait for data input
             self.rx_word = self.stream.rx_queue.rmv_item()
             parse_rx_message(self.rx_word)
@@ -203,6 +206,12 @@ async def main():
             await c_h.ack_ev.wait()
             await c_h.track_end_ev.wait()
 
+    async def track_index(index):
+        """ play track 1 """
+        await c_h.send_command('track', index)
+        await c_h.ack_ev.wait()
+        await c_h.track_end_ev.wait()
+
     async def play():
         """ play track 1 """
         await c_h.send_command('play', 0)
@@ -257,13 +266,17 @@ async def main():
     await play()  # cannot be stopped
     await stop()
     await next_trk(2)
-    task3 = asyncio.create_task(play())  # can be stopped
-    await asyncio.sleep_ms(2000)
+    await track_index(23)
+    await track_index(22)
+    await track_index(21)
+    await track_index(46)
+    await track_index(13)
+    await track_index(21)
+    await asyncio.sleep_ms(5000)
     await stop()
 
     # demo complete
     print('cancel tasks')
-    task3.cancel()  # play()
     task2.cancel()  # DFP busy-pin polling
     task1.cancel()  # Rx stream
     task0.cancel()  # parse Rx data
