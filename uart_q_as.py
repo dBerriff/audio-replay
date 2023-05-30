@@ -1,4 +1,4 @@
-# Test of uasyncio stream I/O using UART
+# Test of uasyncio stream_tr I/O using UART
 # Author: Peter Hinch
 # Copyright Peter Hinch 2017-2022 Released under the MIT license
 # Link X1 and X2 to test.
@@ -16,7 +16,7 @@ import hex_fns as hex_
 
 
 class UartTR:
-    """ implement UART Tx and Rx as stream """
+    """ implement UART Tx and Rx as stream_tr """
     
     def __init__(self, uart, buf_len, tx_queue, rx_queue):
         self.uart = uart
@@ -38,7 +38,7 @@ class UartTR:
             await asyncio.sleep_ms(20)
 
     async def receiver(self):
-        """ coro: read data stream into buffer """
+        """ coro: read data stream_tr into buffer """
         while True:
             res = await self.s_reader.readinto(self.in_buf)
             if res == self.buf_len:

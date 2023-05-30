@@ -68,7 +68,7 @@ class CommandHandler:
     play_set.remove(0)
 
     def __init__(self, stream):
-        self.stream = stream
+        self.stream_tr = stream
         self.tx_word = bytearray(self.BUF_SIZE)
         self.rx_word = bytearray(self.BUF_SIZE)
         # pre-load template fixed values
@@ -107,7 +107,7 @@ class CommandHandler:
             self.get_checksum()
         if cmd_hex in self.play_set:
             self.track_end_ev.clear()
-        await self.stream.sender(self.tx_word)
+        await self.stream_tr.sender(self.tx_word)
         print('Tx:', cmd_str, hex_f.byte_str(cmd_hex), hex_f.reg16_str(param))
         await self.ack_ev.wait()
 
@@ -151,8 +151,8 @@ class CommandHandler:
                       hex_f.reg16_str(rx_param))
 
         while True:
-            await self.stream.rx_queue.is_data.wait()  # wait for data input
-            self.rx_word = self.stream.rx_queue.rmv_item()
+            await self.stream_tr.rx_queue.is_data.wait()  # wait for data input
+            self.rx_word = self.stream_tr.rx_queue.rmv_item()
             parse_rx_message(self.rx_word)
 
 
@@ -248,7 +248,7 @@ async def main():
     # streaming object
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
-    # stream transmit / receive object
+    # stream_tr transmit / receive object
     stream_tr = StreamTR(uart, 10, Queue(20))
     # command-handler object
     c_h = CommandHandler(stream_tr)
@@ -278,7 +278,7 @@ async def main():
     # demo complete
     print('cancel tasks')
     task2.cancel()  # DFP busy-pin polling
-    task1.cancel()  # Rx stream
+    task1.cancel()  # Rx stream_tr
     task0.cancel()  # parse Rx data
 
 

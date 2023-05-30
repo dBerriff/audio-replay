@@ -157,7 +157,7 @@ async def main():
     uart.init(tx=Pin(0), rx=Pin(1))
     controller = Controller(uart)
     asyncio.create_task(controller.c_h.consume_rx_data())
-    asyncio.create_task(controller.c_h.stream.read_rx_data())
+    asyncio.create_task(controller.c_h.stream_tr.read_rx_data())
     thread.start_new_thread(asyncio.create_task(blink()), ())
     asyncio.create_task(blink())
     await controller.dfp_init(15)
