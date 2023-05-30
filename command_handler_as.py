@@ -57,14 +57,15 @@ class CommandHandler:
     hex_str[0x3a] = 'media_insert'
     hex_str[0x3b] = 'media_remove'
 
-    play_set = {'next', 'prev', 'track', 'repeat_trk', 'play',
-                'folder_track', 'repeat_all'}
+    play_str_set = {'play', 'next', 'prev', 'track', 'folder_trk',
+                    'repeat_trk', 'repeat_all'}
+    play_set = {0x0d, 0x01, 0x02, 0x03, 0x0f, 0x08, 0x11}
+    print(play_set)
 
     def __init__(self, stream):
         self.stream = stream
         self.tx_word = bytearray(self.BUF_SIZE)
         self.rx_word = bytearray(self.BUF_SIZE)
-        self.ack_ev = asyncio.Event()
         # pre-load template fixed values
         for key in self.data_template:
             self.tx_word[key] = self.data_template[key]
@@ -73,21 +74,10 @@ class CommandHandler:
         self.rx_param = 0x0000
         self.track_count = 0
         self.current_track = 0
-        self.track_playing_ev = asyncio.Event()
+        self.ack_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
-        self.error_ev = asyncio.Event()
-
+        self.error_ev = asyncio.Event()  # not currently monitored
         self.verbose = True
-        self.sd_online = False
-
-    def print_tx_message(self):
-        """ print bytearray """
-        message = self.tx_word
-        cmd = message[self.CMD]
-        print('tx:',
-              self.hex_str[cmd],
-              hex_f.byte_str(cmd),
-              hex_f.set_reg16_str(message[self.P_H], message[self.P_L]))
 
     def get_checksum(self):
         """ return the 2's complement checksum of:
@@ -101,20 +91,20 @@ class CommandHandler:
         checksum_ += buf_[self.C_L]  # lsb
         return (byte_sum + checksum_) & 0xffff
 
-    async def send_command(self, cmd, param=0):
+    async def send_command(self, cmd_str, param=0):
         """ set tx bytearray values and send
             - commands set own timing """
         self.ack_ev.clear()  # require ACK
-        self.tx_word[self.CMD] = self.str_hex[cmd]
+        cmd_hex = self.str_hex[cmd_str]
+        self.tx_word[self.CMD] = cmd_hex
         self.tx_word[self.P_H], self.tx_word[self.P_L] = \
             hex_f.slice_reg16(param)
         self.tx_word[self.C_H], self.tx_word[self.C_L] = \
             self.get_checksum()
-        if cmd in self.play_set:
-            self.track_playing_ev.set()
+        if cmd_hex in self.play_set:
             self.track_end_ev.clear()
         await self.stream.sender(self.tx_word)
-        self.print_tx_message()
+        print('Tx:', cmd_str, hex_f.byte_str(cmd_hex), hex_f.reg16_str(param))
         await self.ack_ev.wait()
 
     async def consume_rx_data(self):
@@ -122,24 +112,23 @@ class CommandHandler:
 
         def parse_rx_message(message_):
             """ parse incoming message parameters and
-                set controller attributes
+                set dependent attributes
                 - partial implementation for known requirements """
             rx_str_cmd = self.hex_str[message_[self.CMD]]
             rx_cmd = self.str_hex[rx_str_cmd]
             rx_param = hex_f.set_reg16(
                 message_[self.P_H], message_[self.P_L])
 
-            if rx_cmd == 0x3d:  # sd_finish
+            if rx_cmd == 0x41:  # ack
+                self.ack_ev.set()
+            elif rx_cmd == 0x3d:  # sd_finish
                 self.prev_track = self.rx_param
-                self.track_playing_ev.clear()
                 self.track_end_ev.set()
             elif rx_cmd == 0x3f:  # q_init
                 if rx_param != 0x0002:
                     raise Exception('DFPlayer error: no SD card?')
             elif rx_cmd == 0x40:  # error
                 self.error_ev.set()
-            elif rx_cmd == 0x41:  # ack
-                self.ack_ev.set()
             elif rx_cmd == 0x43:  # q_vol
                 self.volume = self.rx_param
             elif rx_cmd == 0x48:  # q_sd_files
@@ -195,7 +184,11 @@ async def main():
         await c_h.send_command('reset', 0)
         await c_h.ack_ev.wait()
         await asyncio.sleep_ms(2000)
-
+        if c_h.rx_cmd != 0x3f:
+            raise Exception('DFPlayer could not be reset')
+        else:
+            print('DFPlayer reset')
+            
     async def next_trk(n=1):
         """ play n next tracks """
         for _ in range(n):
@@ -220,7 +213,6 @@ async def main():
         """ stop playing """
         await c_h.send_command('stop', 0)
         await c_h.ack_ev.wait()
-        c_h.track_playing_ev.clear()
         c_h.track_end_ev.set()
 
     async def vol_set(level):
@@ -262,7 +254,8 @@ async def main():
     await vol_set(15)
     await q_vol()  # confirm volume setting
     await q_sd_files()  # return number of files
-    await play()
+    await play()  # cannot be stopped
+    await stop()
     await next_trk(2)
     task3 = asyncio.create_task(play())  # can be stopped
     await asyncio.sleep_ms(2000)
