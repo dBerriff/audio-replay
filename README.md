@@ -17,7 +17,7 @@ Audacity is recommended as an open-source audio editor.
 
 ### DFPlayer Mini
 
-**command_handler_as.py**: MicroPython script. *asyncio* version of command handler for DFPlayer Mini. DFPlayer documentation has errors so this is work-in-progress. *controller_as.py* will call this module but is not yet complete.
+**command_handler_as.py**: MicroPython script. *asyncio* version of command handler for DFPlayer Mini. DFPlayer documentation has errors so this is work-in-progress. See: https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for better documentation, although not all features are implemented on all versions of the DFPlayer 16P
 
 **uart_os_as**: MicroPython script. *asyncio* version. Includes Queue and StreamTR classes
 
