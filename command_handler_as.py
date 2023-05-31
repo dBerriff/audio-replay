@@ -252,7 +252,6 @@ async def main():
             await c_h.ack_ev.wait()
             await c_h.track_end_ev.wait()
 
-
     # streaming object
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
