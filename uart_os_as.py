@@ -34,20 +34,16 @@ class Queue:
 
     def add_item(self, item):
         """ add item to the queue, checking queue length """
-        if self._len < self.max_len:
-            self._len += 1
-            self._q.append(item)
-        else:
-            print('Queue overflow')
+        # _len is not checked in this version
+        self._len += 1
+        self._q.append(item)
         self.is_data.set()
 
     def rmv_item(self):
         """ remove item from the queue if not empty """
-        if self._len > 0:
-            self._len -= 1
-            item = self._q.popleft()
-        else:
-            item = None
+        # assumes Event is_data prevents attempted removal from empty queue
+        self._len -= 1
+        item = self._q.popleft()
         if self._len == 0:
             self.is_data.clear()
         return item

@@ -148,9 +148,9 @@ class CommandHandler:
             elif rx_cmd == 0x43:  # q_vol
                 self.volume = self.rx_param
             elif rx_cmd == 0x48:  # q_sd_files
-                self.track_count = self.rx_param
+                self.track_count = rx_param
             elif rx_cmd == 0x4c:  # q_sd_trk
-                self.current_track = self.rx_param
+                self.current_track = rx_param
             elif rx_cmd == 0x3a:  # media_insert
                 print('SD-card inserted.')
             elif rx_cmd == 0x3b:  # media_remove
@@ -164,6 +164,7 @@ class CommandHandler:
 
         while True:
             await self.rx_queue.is_data.wait()  # wait for data input
+            # print(f'Rx queue length: {self.rx_queue.q_len}')
             self.rx_word = self.rx_queue.rmv_item()
             parse_rx_message(self.rx_word)
 
@@ -283,6 +284,7 @@ async def main():
     await reset()
     await vol_set(15)
     await q_sd_files()  # return number of files
+    print(f'Number of SD-card files: {c_h.track_count}')
     await track_sequence((voice['time_is'], 9, 25))
     await asyncio.sleep(2)
     await track_sequence((voice['time_is'], 13, 57))
