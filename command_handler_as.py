@@ -77,6 +77,8 @@ class CommandHandler:
 
     def __init__(self, stream):
         self.stream_tr = stream
+        self.sender = stream.sender
+        self.rx_queue = stream.rx_queue
         self.tx_word = bytearray(self.BUF_SIZE)
         self.rx_word = bytearray(self.BUF_SIZE)
         # pre-load template fixed values
@@ -113,10 +115,12 @@ class CommandHandler:
             hex_f.slice_reg16(param)
         self.tx_word[self.C_H], self.tx_word[self.C_L] = \
             self.get_checksum()
+        # if command plays a track, clear track_end_ev
         if cmd_hex in self.play_set:
             self.track_end_ev.clear()
-        await self.stream_tr.sender(self.tx_word)
+        await self.sender(self.tx_word)
         print('Tx:', cmd_str, hex_f.byte_str(cmd_hex), hex_f.reg16_str(param), param)
+        # ack_ev is set in parse_rx_message()
         await self.ack_ev.wait()
 
     async def consume_rx_data(self):
@@ -130,16 +134,16 @@ class CommandHandler:
             rx_cmd = self.str_hex[rx_str_cmd]
             rx_param = hex_f.set_reg16(
                 message_[self.P_H], message_[self.P_L])
-
+            # check for specific messages that require action
             if rx_cmd == 0x41:  # ack
                 self.ack_ev.set()
             elif rx_cmd == 0x3d:  # sd_finish
-                self.prev_track = self.rx_param
                 self.track_end_ev.set()
             elif rx_cmd == 0x3f:  # q_init
                 if rx_param != 0x0002:
                     raise Exception('DFPlayer error: no SD card?')
             elif rx_cmd == 0x40:  # error
+                # error_ev is not currently monitored
                 self.error_ev.set()
             elif rx_cmd == 0x43:  # q_vol
                 self.volume = self.rx_param
@@ -148,7 +152,7 @@ class CommandHandler:
             elif rx_cmd == 0x4c:  # q_sd_trk
                 self.current_track = self.rx_param
             elif rx_cmd == 0x3a:  # media_insert
-                pass
+                print('SD-card inserted.')
             elif rx_cmd == 0x3b:  # media_remove
                 raise Exception('DFPlayer error: SD card removed!')
             
@@ -159,8 +163,8 @@ class CommandHandler:
                       hex_f.reg16_str(rx_param), rx_param)
 
         while True:
-            await self.stream_tr.rx_queue.is_data.wait()  # wait for data input
-            self.rx_word = self.stream_tr.rx_queue.rmv_item()
+            await self.rx_queue.is_data.wait()  # wait for data input
+            self.rx_word = self.rx_queue.rmv_item()
             parse_rx_message(self.rx_word)
 
 
