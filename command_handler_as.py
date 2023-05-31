@@ -220,7 +220,7 @@ async def main():
             await c_h.ack_ev.wait()
             await c_h.track_end_ev.wait()
 
-    async def track_i(track):
+    async def track(track=1):
         """ coro: play track n """
         await c_h.send_command('track', track)
         await c_h.ack_ev.wait()
@@ -280,12 +280,14 @@ async def main():
     task2 = asyncio.create_task(busy_pin_state(2))
     
     voice = {'time_is': 76, 'midnight': 75}
-    
+
     print('Send commands')
     await reset()
-    await vol_set(15)
+    await vol_set(20)
     await q_sd_files()  # return number of files
     print(f'Number of SD-card files: {c_h.track_count}')
+    await track(79)
+    await asyncio.sleep_ms(2000)
     await track_sequence((voice['time_is'], 9, 25))
     await asyncio.sleep(2)
     await track_sequence((voice['time_is'], 13, 57))
@@ -293,14 +295,10 @@ async def main():
     await track_sequence((voice['time_is'], 65))
     await asyncio.sleep(2)
     await track_sequence((voice['time_is'], voice['midnight']))
+    await track(77)
     await asyncio.sleep_ms(200)
     await stop()
-
-    # demo complete
-    print('cancel tasks')
-    task2.cancel()  # DFP busy-pin polling
-    task1.cancel()  # Rx stream_tr
-    task0.cancel()  # parse Rx data
+    print('demo complete')
 
 
 if __name__ == '__main__':
