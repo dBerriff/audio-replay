@@ -1,12 +1,17 @@
+# uart_os_as.py
+
 # Test of uasyncio stream_tr I/O using UART
 # Author: Peter Hinch
 # Copyright Peter Hinch 2017-2022 Released under the MIT license
 # Link X1 and X2 to test.
 
 """
+    developed by David B Jones for Famous Trains model railway, Derby.
+    - http://www.famoustrains.org.uk
     initial development of uasyncio.Stream UART connection:
-    - uses Queue for receive stream_tr
-    - uses 'one-shot' send for transmit
+    - uses Queue for receive stream_tr although not actually required at 9600 BAUD
+    - Queue uses collections.deque for efficiency
+    - uses 'one-shot' send for commands
     - coro is short for coroutine
 """
 
@@ -107,7 +112,7 @@ def q_dump(q_, name=''):
 
 async def main():
     """ coro: test module classes """
-    print('Requires loopback: Tx pin to Rx pin')
+    print('Requires Pico loopback: Tx pin to Rx pin')
 
     data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
     

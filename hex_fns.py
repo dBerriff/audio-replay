@@ -45,6 +45,7 @@ def set_reg16(msb, lsb):
     value += lsb
     return value & 0xffff
 
+
 def set_reg16_str(msb, lsb):
     return reg16_str(set_reg16(msb, lsb))
 

@@ -1,3 +1,11 @@
+# command_handler_as.py
+"""
+Control a DFPlayer Mini (DFP) from a Raspberry Pi Pico.
+Requires modules hex_fns and uart_os_as to be loaded onto the Pico.
+See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP documentation
+Not all DFP commands are required or have been tested.
+"""
+
 from machine import UART, Pin
 import uasyncio as asyncio
 import hex_fns as hex_f
