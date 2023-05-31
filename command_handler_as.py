@@ -16,6 +16,7 @@ class CommandHandler:
     """ formats, sends and receives command and query messages
         - see Flyron Technology Co documentation for references
         - www.flyrontech.com
+        - coro is short for coroutine
     """
 
     BUF_SIZE = const(10)
@@ -106,7 +107,7 @@ class CommandHandler:
         return (byte_sum + checksum_) & 0xffff
 
     async def send_command(self, cmd_str, param=0):
-        """ set tx bytearray values and send
+        """ coro: set tx bytearray values and send
             - commands set own timing """
         self.ack_ev.clear()  # require ACK
         cmd_hex = self.str_hex[cmd_str]
@@ -124,10 +125,10 @@ class CommandHandler:
         await self.ack_ev.wait()
 
     async def consume_rx_data(self):
-        """ parses and prints queued data """
+        """ coro: parses and prints received data """
 
         def parse_rx_message(message_):
-            """ parse incoming message parameters and
+            """ parse incoming message_ parameters and
                 set dependent attributes
                 - partial implementation for known requirements """
             rx_str_cmd = self.hex_str[message_[self.CMD]]
@@ -170,7 +171,7 @@ class CommandHandler:
 
 
 async def busy_pin_state(pin_):
-    """ poll DFPlayer Pin 16
+    """ coro: poll DFPlayer Pin 16
         - set Pico onboard LED to On if busy
         - included to show alternative control option
         - low when working, high when standby
@@ -191,7 +192,7 @@ async def main():
     """ test CommandHandler and UartTxRx """
     
     async def reset():
-        """ reset the DFPlayer
+        """ coro: reset the DFPlayer
             - with SD card response should be:
                 Rx word: q_init 0x3f 0x0002
                 -- signifies online storage: SD card
@@ -206,60 +207,60 @@ async def main():
             print('DFPlayer reset')
             
     async def next_trk(n=1):
-        """ play n next tracks """
+        """ coro: play n next tracks """
         for _ in range(n):
             await c_h.send_command('next', 0)
             await c_h.ack_ev.wait()
             await c_h.track_end_ev.wait()
 
     async def prev_trk(n=1):
-        """ play n previous tracks """
+        """ coro: play n previous tracks """
         for _ in range(n):
             await c_h.send_command('prev', 0)
             await c_h.ack_ev.wait()
             await c_h.track_end_ev.wait()
 
     async def track_i(track):
-        """ play track n """
+        """ coro: play track n """
         await c_h.send_command('track', track)
         await c_h.ack_ev.wait()
         await c_h.track_end_ev.wait()
 
     async def play():
-        """ play track 1 """
+        """ coro: play track 1 """
         await c_h.send_command('play', 0)
         await c_h.ack_ev.wait()
         await c_h.track_end_ev.wait()
 
     async def stop():
-        """ stop playing """
+        """ coro: stop playing """
         await c_h.send_command('stop', 0)
         await c_h.ack_ev.wait()
         c_h.track_end_ev.set()
 
     async def vol_set(level):
-        """ set volume level 0-30 """
+        """ coro: set volume level 0-30 """
         level = min(30, level)
         await c_h.send_command('vol_set', level)
         await c_h.ack_ev.wait()
 
     async def q_vol():
-        """ query volume level """
+        """ coro: query volume level """
         await c_h.send_command('q_vol')
         await c_h.ack_ev.wait()
 
     async def q_sd_files():
-        """ query number of SD files (in root?) """
+        """ coro: query number of SD files (in root?) """
         await c_h.send_command('q_sd_files')
         await c_h.ack_ev.wait()
 
     async def q_sd_trk():
-        """ query current track number """
+        """ coro: query current track number """
         await c_h.send_command('q_sd_trk')
         await c_h.ack_ev.wait()
 
     async def track_sequence(sequence):
-        """ play sequence of tracks by number """
+        """ coro: play sequence of tracks by number """
         for track in sequence:
             await c_h.send_command('track', track)
             await c_h.ack_ev.wait()
