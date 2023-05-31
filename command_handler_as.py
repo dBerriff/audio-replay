@@ -108,7 +108,7 @@ class CommandHandler:
         if cmd_hex in self.play_set:
             self.track_end_ev.clear()
         await self.stream_tr.sender(self.tx_word)
-        print('Tx:', cmd_str, hex_f.byte_str(cmd_hex), hex_f.reg16_str(param))
+        print('Tx:', cmd_str, hex_f.byte_str(cmd_hex), hex_f.reg16_str(param), param)
         await self.ack_ev.wait()
 
     async def consume_rx_data(self):
@@ -148,7 +148,7 @@ class CommandHandler:
             self.rx_param = rx_param
             if rx_cmd != 0x41:  # skip ack
                 print('Rx:', rx_str_cmd, hex_f.byte_str(rx_cmd),
-                      hex_f.reg16_str(rx_param))
+                      hex_f.reg16_str(rx_param), rx_param)
 
         while True:
             await self.stream_tr.rx_queue.is_data.wait()  # wait for data input
@@ -206,9 +206,9 @@ async def main():
             await c_h.ack_ev.wait()
             await c_h.track_end_ev.wait()
 
-    async def track_index(index):
-        """ play track 1 """
-        await c_h.send_command('track', index)
+    async def track_i(track):
+        """ play track n """
+        await c_h.send_command('track', track)
         await c_h.ack_ev.wait()
         await c_h.track_end_ev.wait()
 
@@ -245,6 +245,14 @@ async def main():
         await c_h.send_command('q_sd_trk')
         await c_h.ack_ev.wait()
 
+    async def track_sequence(sequence):
+        """ play sequence of tracks by number """
+        for track in sequence:
+            await c_h.send_command('track', track)
+            await c_h.ack_ev.wait()
+            await c_h.track_end_ev.wait()
+
+
     # streaming object
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
@@ -258,21 +266,20 @@ async def main():
     # demonstrate busy-pin polling - not used for control
     task2 = asyncio.create_task(busy_pin_state(2))
     
+    voice = {'time_is': 76, 'midnight': 75}
+    
     print('Send commands')
     await reset()
     await vol_set(15)
-    await q_vol()  # confirm volume setting
     await q_sd_files()  # return number of files
-    await play()  # cannot be stopped
-    await stop()
-    await next_trk(2)
-    await track_index(23)
-    await track_index(22)
-    await track_index(21)
-    await track_index(46)
-    await track_index(13)
-    await track_index(21)
-    await asyncio.sleep_ms(5000)
+    await track_sequence((voice['time_is'], 9, 25))
+    await asyncio.sleep(2)
+    await track_sequence((voice['time_is'], 13, 57))
+    await asyncio.sleep(2)
+    await track_sequence((voice['time_is'], 65))
+    await asyncio.sleep(2)
+    await track_sequence((voice['time_is'], voice['midnight']))
+    await asyncio.sleep_ms(200)
     await stop()
 
     # demo complete
