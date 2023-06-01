@@ -1,4 +1,4 @@
-#dfp_player.py
+#dfp_control.py
 """ Control DFPlayer Mini """
 
 import uasyncio as asyncio
