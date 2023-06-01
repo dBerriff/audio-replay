@@ -177,132 +177,33 @@ class CommandHandler:
 
 async def main():
     """ test CommandHandler and UartTxRx """
+
+    def q_dump(q_, name=''):
+        """ destructive! : print queue contents:  """
+        print(f'{name}queue contents:')
+        while q_.q_len:
+            item = q_.rmv_item()
+            print(hex_f.byte_array_str(item))
+
+    # replace with sample DFP control words
+    data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
     
-    async def reset():
-        """ coro: reset the DFPlayer
-            - with TF-card response should be:
-                Rx word: q_init 0x3f 0x0002
-                -- 0x0002: online storage is TF-card
-        """
-        print('Attempt DFPlayer reset...')
-        await c_h.send_command('reset', 0)
-        await c_h.ack_ev.wait()
-        await asyncio.sleep_ms(2000)
-        # require media online and TF-card present
-        if c_h.rx_cmd == 0x3f and c_h.rx_param & 0x02:
-            print('DFPlayer: reset succesful')
-        else:
-            raise Exception('DFPlayer: could not be reset')                
-            
-    async def next_trk():
-        """ coro: play next track
-            - track number is computed, not checked """
-        await c_h.send_command('next', 0)
-        await c_h.ack_ev.wait()
-        c_h.current_track += 1
-        print(f'Track: {c_h.current_track}')
-        await c_h.track_end_ev.wait()
-
-    async def prev_trk():
-        """ coro: play previous track
-            - track number is computed, not checked """
-        await c_h.send_command('prev', 0)
-        await c_h.ack_ev.wait()
-        c_h.current_track -= 1
-        print(f'Track: {c_h.current_track}')
-        await c_h.track_end_ev.wait()
-
-    async def track(track_i=1):
-        """ coro: play track n """
-        await c_h.send_command('track', track_i)
-        await c_h.ack_ev.wait()
-        c_h.current_track = track_i
-        print(f'Track: {c_h.current_track}')
-        await c_h.track_end_ev.wait()
-
-    async def stop():
-        """ coro: stop playing """
-        await c_h.send_command('stop', 0)
-        await c_h.ack_ev.wait()
-        c_h.track_end_ev.set()
-
-    async def vol_set(level):
-        """ coro: set volume level 0-30 """
-        level = min(30, level)
-        await c_h.send_command('vol_set', level)
-        await c_h.ack_ev.wait()
-
-    async def q_vol():
-        """ coro: query volume level """
-        await c_h.send_command('q_vol')
-        await c_h.ack_ev.wait()
-        print(f'Volume level: {c_h.volume} (0-30)')
-
-    async def q_sd_files():
-        """ coro: query number of TF files (in root?) """
-        await c_h.send_command('q_sd_files')
-        await c_h.ack_ev.wait()
-        print(f'Number of TF-card files: {c_h.track_count}')
-
-    async def q_sd_trk():
-        """ coro: query current track number """
-        await c_h.send_command('q_sd_trk')
-        await c_h.ack_ev.wait()
-        print(f'Current track: {c_h.current_track}')
-
-    async def track_sequence(sequence):
-        """ coro: play sequence of tracks by number
-            - sequence is a list or tuple """
-        for track_ in sequence:
-            await c_h.send_command('track', track_)
-            await c_h.ack_ev.wait()
-            print(f'Track: {track_}')
-            await c_h.track_end_ev.wait()
-
-    async def play():
-        """ replace 'play' command """
-        await track(1)
-
-    # streaming object
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
     stream_tr = StreamTR(uart, 10, Queue(20))
-    c_h = CommandHandler(stream_tr)
-    # tasks are non-blocking; the task is added to the scheduler
     asyncio.create_task(stream_tr.receiver())
-    asyncio.create_task(c_h.consume_rx_data())
+    # run blink as demonstration of additional task
     
-    # dictionary of tracks for selected phrases
-    phrase_track = {'time_is': 76, 'midnight': 75}
+    for i in range(10):
+        data[0] = i
+        await stream_tr.sender(data)
+        print(f'{i} Tx item')
 
-    # awaited coros block; the coro is added to the scheduler
-    print('Send commands')
-    await reset()
-    await vol_set(20)
-    await q_vol()
-    await q_sd_files()  # return number of files
-
-    await track_sequence((phrase_track['time_is'], 9, 25))
-    await asyncio.sleep(2)
-    await track_sequence((phrase_track['time_is'], 13, 57))
-    await asyncio.sleep(2)
-    await track_sequence((phrase_track['time_is'], 65))
-    await asyncio.sleep(2)    
-    await track_sequence(
-        (phrase_track['time_is'], phrase_track['midnight']))
-
-    await play()
-    await next_trk()
-    await next_trk()
-    await prev_trk()
-    await track(61)
-    await next_trk()
-    await next_trk()
-    await prev_trk()
     await asyncio.sleep_ms(1000)
-    await stop()
-    print('demo complete')
 
+    # demonstrate that items have been added to the queue
+    q_dump(stream_tr.rx_queue, name='Receive ')
+    
 
 if __name__ == '__main__':
     try:

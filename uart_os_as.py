@@ -98,16 +98,18 @@ def led_off():
     led.value(0)
 
 
-def q_dump(q_, name=''):
-    """ destructive! : print queue contents:  """
-    print(f'{name}queue contents:')
-    while q_.q_len:
-        item = q_.rmv_item()
-        print(hex_.byte_array_str(item))
 
 
 async def main():
     """ coro: test module classes """
+
+    def q_dump(q_, name=''):
+        """ destructive! : print queue contents:  """
+        print(f'{name}queue contents:')
+        while q_.q_len:
+            item = q_.rmv_item()
+            print(hex_.byte_array_str(item))
+
     print('Requires Pico loopback: Tx pin to Rx pin')
 
     data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
