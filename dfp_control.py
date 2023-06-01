@@ -1,5 +1,5 @@
 #dfp_control.py
-""" Control DFPlayer Mini """
+""" Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
 from machine import Pin, UART
