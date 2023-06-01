@@ -1,4 +1,4 @@
-# command_handler_as.py
+.# command_handler_as.py
 """
 Control a DFPlayer Mini (DFP) from a Raspberry Pi Pico.
 Requires modules hex_fns and uart_os_as to be loaded onto the Pico.
@@ -279,7 +279,7 @@ async def main():
     # demonstrate busy-pin polling - not used for control
     task2 = asyncio.create_task(busy_pin_state(2))
     
-    voice = {'time_is': 76, 'midnight': 75}
+    phrase = {'time_is': 76, 'midnight': 75}
 
     print('Send commands')
     await reset()
@@ -288,13 +288,13 @@ async def main():
     print(f'Number of SD-card files: {c_h.track_count}')
     await track(79)
     await asyncio.sleep_ms(2000)
-    await track_sequence((voice['time_is'], 9, 25))
+    await track_sequence((phrase['time_is'], 9, 25))
     await asyncio.sleep(2)
-    await track_sequence((voice['time_is'], 13, 57))
+    await track_sequence((phrase['time_is'], 13, 57))
     await asyncio.sleep(2)
-    await track_sequence((voice['time_is'], 65))
+    await track_sequence((phrase['time_is'], 65))
     await asyncio.sleep(2)
-    await track_sequence((voice['time_is'], voice['midnight']))
+    await track_sequence((phrase['time_is'], voice['midnight']))
     await track(77)
     await asyncio.sleep_ms(200)
     await stop()
