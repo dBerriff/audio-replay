@@ -132,6 +132,9 @@ class CommandHandler:
                 set dependent attributes
                 - partial implementation for known requirements """
             rx_cmd = message_[self.CMD]
+            if self.check_checksum(rx_cmd):
+                print(f'{rx_cmd}: error in checksum')
+                return
             rx_param = hex_f.set_reg16(
                 message_[self.P_H], message_[self.P_L])
 
