@@ -249,16 +249,19 @@ async def main():
         """ coro: query volume level """
         await c_h.send_command('q_vol')
         await c_h.ack_ev.wait()
+        print(f'Volume level: {c_h.volume} (0-30)')
 
     async def q_sd_files():
         """ coro: query number of SD files (in root?) """
         await c_h.send_command('q_sd_files')
         await c_h.ack_ev.wait()
+        print(f'Number of SD-card files: {c_h.track_count}')
 
     async def q_sd_trk():
         """ coro: query current track number """
         await c_h.send_command('q_sd_trk')
         await c_h.ack_ev.wait()
+        print(f'Current track: {c_h.current_track}')
 
     async def track_sequence(sequence):
         """ coro: play sequence of tracks by number """
@@ -275,30 +278,32 @@ async def main():
     stream_tr = StreamTR(uart, 10, Queue(20))
     # command-handler object
     c_h = CommandHandler(stream_tr)
-    # Rx tasks run as cooperative tasks
+    # tasks are non-blocking; the task is added to the scheduler,
+    # the next command is executed immediately
     task0 = asyncio.create_task(stream_tr.receiver())
     task1 = asyncio.create_task(c_h.consume_rx_data())
     # demonstrate busy-pin polling - not used for control
     task2 = asyncio.create_task(busy_pin_state(2))
     
-    voice = {'time_is': 76, 'midnight': 75}
+    # dictionary of tracks for selected phrases
+    phrase_track = {'time_is': 76, 'midnight': 75}
 
+    # awaited coroutines block; the coro is added to the scheduler,
+    # the next command is not executed until the coroutine completes
     print('Send commands')
     await reset()
     await vol_set(20)
     await q_vol()
-    print(f'Volume level: {c_h.volume} (0-30)')
     await q_sd_files()  # return number of files
-    print(f'Number of SD-card files: {c_h.track_count}')
     await track(79)
     await asyncio.sleep_ms(2000)
-    await track_sequence((voice['time_is'], 9, 25))
+    await track_sequence((phrase_track['time_is'], 9, 25))
     await asyncio.sleep(2)
-    await track_sequence((voice['time_is'], 13, 57))
+    await track_sequence((phrase_track['time_is'], 13, 57))
     await asyncio.sleep(2)
-    await track_sequence((voice['time_is'], 65))
+    await track_sequence((phrase_track['time_is'], 65))
     await asyncio.sleep(2)
-    await track_sequence((voice['time_is'], voice['midnight']))
+    await track_sequence((phrase_track['time_is'], phrase_track['midnight']))
     await track(77)
     await asyncio.sleep_ms(200)
     await stop()
