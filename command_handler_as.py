@@ -296,7 +296,6 @@ async def main():
     await asyncio.sleep(2)
     await track_sequence((phrase['time_is'], phrase['midnight']))
     await track(77)
-    await asyncio.sleep_ms(200)
     await stop()
     print('demo complete')
 
