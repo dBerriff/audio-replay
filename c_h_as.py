@@ -5,7 +5,7 @@ Requires modules hex_fns and uart_os_as to be loaded onto the Pico.
 See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP documentation
 Not all DFP commands are required or have been tested.
 
-- TF-card is synonomous with microSD Card
+- TF-card is synonymous with microSD Card
 - this version is for TF-cards only
 - simplified: no folder-related commands
 
@@ -182,8 +182,7 @@ async def main():
         """ coro: reset the DFPlayer
             - with TF-card response should be:
                 Rx word: q_init 0x3f 0x0002
-                -- signifies online storage: TF-card
-                -- not currently checked by software
+                -- 0x0002: online storage is TF-card
         """
         print('Attempt DFPlayer reset...')
         await c_h.send_command('reset', 0)
@@ -270,8 +269,8 @@ async def main():
     stream_tr = StreamTR(uart, 10, Queue(20))
     c_h = CommandHandler(stream_tr)
     # tasks are non-blocking; the task is added to the scheduler
-    task0 = asyncio.create_task(stream_tr.receiver())
-    task1 = asyncio.create_task(c_h.consume_rx_data())
+    asyncio.create_task(stream_tr.receiver())
+    asyncio.create_task(c_h.consume_rx_data())
     
     # dictionary of tracks for selected phrases
     phrase_track = {'time_is': 76, 'midnight': 75}
