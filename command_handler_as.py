@@ -87,7 +87,8 @@ class CommandHandler:
             self.tx_word[key] = self.data_template[key]
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
-        self.track_count = 0  # not currently used
+        self.volume = 0  # for info
+        self.track_count = 0  # for info
         self.current_track = 0  # not currently used
         self.ack_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
@@ -120,7 +121,6 @@ class CommandHandler:
         if cmd_hex in self.play_set:
             self.track_end_ev.clear()
         await self.sender(self.tx_word)
-        print('Tx:', cmd_str, hex_f.byte_str(cmd_hex), hex_f.reg16_str(param), param)
         # ack_ev is set in parse_rx_message()
         await self.ack_ev.wait()
 
@@ -150,7 +150,7 @@ class CommandHandler:
                 # error_ev is not currently monitored
                 self.error_ev.set()
             elif rx_cmd == 0x43:  # q_vol
-                self.volume = self.rx_param
+                self.volume = rx_param
             elif rx_cmd == 0x48:  # q_sd_files
                 self.track_count = rx_param
             elif rx_cmd == 0x4c:  # q_sd_trk
@@ -162,9 +162,6 @@ class CommandHandler:
 
             self.rx_cmd = rx_cmd
             self.rx_param = rx_param
-            if rx_cmd != 0x41:  # skip print of ack
-                print('Rx:', self.hex_str[rx_cmd], hex_f.byte_str(rx_cmd),
-                      hex_f.reg16_str(rx_param), rx_param)
 
         while True:
             await self.rx_queue.is_data.wait()  # wait for data input
@@ -227,6 +224,7 @@ async def main():
         """ coro: play track n """
         await c_h.send_command('track', track_)
         await c_h.ack_ev.wait()
+        print(f'Track: {track_}')
         await c_h.track_end_ev.wait()
 
     async def play():
@@ -267,6 +265,7 @@ async def main():
         for track_ in sequence:
             await c_h.send_command('track', track_)
             await c_h.ack_ev.wait()
+            print(f'Track: {track_}')
             await c_h.track_end_ev.wait()
 
     # streaming object
@@ -287,6 +286,8 @@ async def main():
     print('Send commands')
     await reset()
     await vol_set(20)
+    await q_vol()
+    print(f'Volume level: {c_h.volume} (0-30)')
     await q_sd_files()  # return number of files
     print(f'Number of SD-card files: {c_h.track_count}')
     await track(79)
