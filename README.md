@@ -30,6 +30,6 @@ See: https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP docum
 
 Notes:
 
-repeat modes are problematic (mode persists) and have not been implemented.
+- repeat modes are problematic (all-tracks mode does not work; single track mode persists) and have not been implemented.
 
-folders have not been used.
+- folders have not been used.
