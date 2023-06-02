@@ -5,6 +5,7 @@ import uasyncio as asyncio
 from machine import Pin, UART
 from uart_os_as import Queue, StreamTR
 from c_h_as import CommandHandler
+import hex_fns
 
 class DfPlayer:
     
@@ -107,51 +108,55 @@ class DfPlayer:
         await self.track(1)
 
 
-
 async def main():
     """ test DFPlayer controller """
     
-    def get_commands(cmd_file):
-        """ read in and tokenise command file
+    def get_command_lines(cmd_file):
+        """ read in command-lines from a text file
             - work-in-progress! """
-        commands = []
         with open(cmd_file) as fp:
-            for line in fp:
-                tokens = line.split()
-                cmd = tokens[0]
-                params = tokens[1:]
-                commands.append((cmd, params))
+            commands = [line for line in fp]
         return commands
 
     async def run_commands(commands_):
         """ control DFP from simple text commands
             - format is cmd: str, parameters: (p0: str, ...)
             - work-in-progress! """
-        print('In run_commands()')
-        for item in commands_:
-            cmd = item[0]
-            params = item[1]
+
+        for line in commands_:
+            line = line.strip()  # trim
+            # print comment line
+            if line[0] == '#':
+                print(line)
+                continue
+            # remove commas; remove extra spaces
+            line = line.replace(',', ' ')
+            while '  ' in line:
+                line = line.replace('  ', ' ')
+
+            tokens = line.split(' ')
+            cmd = tokens[0]
+            params = tokens[1:]
+            
             if cmd == 'trk':
                 # parameters required as int
                 params = [int(p) for p in params]
                 await player.track_sequence(params)
+            elif cmd == 'zzz':
+                param = int(params[0])
+                await asyncio.sleep(param)
             elif cmd == 'nxt':
                 await player.next_trk()
             elif cmd == 'prv':
                 await player.prev_trk()
             elif cmd == 'rst':
                 await player.reset()
-            elif cmd == 'zzz':
-                param = int(params[0])
-                await asyncio.sleep(param)
-            elif cmd == 'stp':
-                await player.stop()
             elif cmd == 'vol':
                 param = int(params[0])
                 await player.vol_set(param)
                 await player.q_vol()
-            else:
-                print(item)
+            elif cmd == 'stp':
+                await player.stop()
 
     player = DfPlayer()
     # tasks are non-blocking; the task is added to the scheduler
@@ -182,7 +187,7 @@ async def main():
     await player.prev_trk()
     await asyncio.sleep(1)
     """
-    commands = get_commands('test.txt')
+    commands = get_command_lines('test.txt')
     await run_commands(commands)
 
 

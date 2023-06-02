@@ -97,6 +97,11 @@ class CommandHandler:
         self.error_ev = asyncio.Event()  # not currently monitored
         self.verbose = True
 
+    def print_rx_message(self):
+        """ for testing """
+        print('Latest Rx message:', hex_f.byte_str(self.rx_cmd),
+              hex_f.byte_str(self.rx_param))
+
     def get_checksum(self):
         """ return the 2's complement checksum of:
             - bytes 1 to 6 """
@@ -146,6 +151,7 @@ class CommandHandler:
             # check for specific messages that require action
             if rx_cmd == 0x41:  # ack
                 self.ack_ev.set()
+                return  # skip object update
             elif rx_cmd == 0x3d:  # sd_finish
                 self.current_track = rx_param
                 self.track_end_ev.set()
@@ -178,32 +184,26 @@ class CommandHandler:
 async def main():
     """ test CommandHandler and UartTxRx """
 
-    def q_dump(q_, name=''):
-        """ destructive! : print queue contents:  """
-        print(f'{name}queue contents:')
-        while q_.q_len:
-            item = q_.rmv_item()
-            print(hex_f.byte_array_str(item))
-
-    # replace with sample DFP control words
-    data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
+    commands = (('reset', 0), ('vol_set', 15), ('q_vol', 0),
+                ('repeat_trk', 9), ('stop', 0))
     
+
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
     stream_tr = StreamTR(uart, 10, Queue(20))
-    asyncio.create_task(stream_tr.receiver())
-    # run blink as demonstration of additional task
-    
-    for i in range(10):
-        data[0] = i
-        await stream_tr.sender(data)
-        print(f'{i} Tx item')
+    c_h = CommandHandler(stream_tr)
 
-    await asyncio.sleep_ms(1000)
+    # start receive and send tasks
+    asyncio.create_task(c_h.stream_tr.receiver())
+    asyncio.create_task(c_h.consume_rx_data())
 
-    # demonstrate that items have been added to the queue
-    q_dump(stream_tr.rx_queue, name='Receive ')
-    
+    for cmd in commands:
+        print(cmd)
+        await c_h.send_command(cmd[0], cmd[1])
+        await c_h.ack_ev.wait()
+        await asyncio.sleep(2)
+        c_h.print_rx_message()
+
 
 if __name__ == '__main__':
     try:

@@ -1,12 +1,11 @@
 # test file for df_control.py
 rst
+zzz 2
 vol 15
-trk 76 9 25
+trk 76  9  25
 zzz 2
-trk 76 13 57
-zzz 2
-trk 76 65
 trk 76 75
+zzz 2
 trk 1
 nxt
 nxt
