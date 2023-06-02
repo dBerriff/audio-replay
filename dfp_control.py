@@ -31,26 +31,29 @@ class DfPlayer:
             print('DFPlayer reset')
 
 
-    async def next_trk(self, n=1):
-        """ coro: play n next tracks """
-        for _ in range(n):
-            await self.c_h.send_command('next', 0)
-            await self.c_h.ack_ev.wait()
-            await self.c_h.track_end_ev.wait()
+    async def next_trk(self):
+        """ coro: play next track """
+        await self.c_h.send_command('next', 0)
+        await self.c_h.ack_ev.wait()
+        self.c_h.current_track += 1
+        print(f'Track: {self.c_h.current_track}')
+        await self.c_h.track_end_ev.wait()
 
 
-    async def prev_trk(self, n=1):
-        """ coro: play n previous tracks """
-        for _ in range(n):
-            await self.c_h.send_command('prev', 0)
-            await self.c_h.ack_ev.wait()
-            await self.c_h.track_end_ev.wait()
+    async def prev_trk(self):
+        """ coro: play previous track """
+        await self.c_h.send_command('prev', 0)
+        await self.c_h.ack_ev.wait()
+        self.c_h.current_track -= 1
+        print(f'Track: {self.c_h.current_track}')
+        await self.c_h.track_end_ev.wait()
 
 
     async def track(self, track_=1):
         """ coro: play track n """
         await self.c_h.send_command('track', track_)
         await self.c_h.ack_ev.wait()
+        self.c_h.current_track = track_
         print(f'Track: {track_}')
         await self.c_h.track_end_ev.wait()
 
@@ -67,6 +70,7 @@ class DfPlayer:
         level = min(30, level)
         await self.c_h.send_command('vol_set', level)
         await self.c_h.ack_ev.wait()
+        self.c_h.volume_level = level
 
 
     async def q_vol(self):
@@ -103,35 +107,66 @@ class DfPlayer:
         await self.track(1)
 
 
+
 async def main():
     """ test CommandHandler and UartTxRx """
     
+    def get_commands(cmd_file):
+        """ read in and tokenise command file """
+        commands = []
+        with open(cmd_file) as fp:
+            for line in fp:
+                tokens = line.split()
+                cmd = tokens[0]
+                params = tokens[1:]
+                commands.append((cmd, params))
+        return commands
+
+    async def run_commands(commands_):
+        """ control DFP from simple text script """
+        print('In run_commands()')
+        for item in commands_:
+            cmd = item[0]
+            params = item[1]
+            if cmd == 'trk':
+                params = [int(p) for p in params]
+                await player.track_sequence(params)
+            elif cmd == 'nxt':
+                await player.next_trk()
+            elif cmd == 'prv':
+                await player.prev_trk()
+            elif cmd == 'rst':
+                await player.reset()
+            elif cmd == 'zzz':
+                param = int(params[0])
+                await asyncio.sleep(param)
+            elif cmd == 'stp':
+                await player.stop()
+            elif cmd == 'vol':
+                param = int(params[0])
+                await player.vol_set(param)
+                await player.q_vol()
+            else:
+                print(item)
+
     player = DfPlayer()
     # tasks are non-blocking; the task is added to the scheduler
     asyncio.create_task(player.c_h.stream_tr.receiver())
     asyncio.create_task(player.c_h.consume_rx_data())
     
-    # dictionary of tracks for selected phrases
-    phrase_track = {'time_is': 76, 'midnight': 75}
-
     # awaited coros block; the coro is added to the scheduler
     print('Send commands')
+    """
     await player.reset()
     await player.vol_set(20)
     await player.q_vol()
     await player.q_sd_files()  # return number of files
 
-    await player.track_sequence(
-        (phrase_track['time_is'], 9, 25))
+    await player.track_sequence((76, 9, 25))
     await asyncio.sleep(2)
-    await player.track_sequence(
-        (phrase_track['time_is'], 13, 57))
-    await asyncio.sleep(2)
-    await player.track_sequence(
-        (phrase_track['time_is'], 65))
+    await player.track_sequence((76, 65))
     await asyncio.sleep(2)    
-    await player.track_sequence(
-        (phrase_track['time_is'], phrase_track['midnight']))
+    await player.track_sequence((76, 75))
 
     await player.play()
     await player.next_trk()
@@ -141,9 +176,10 @@ async def main():
     await player.next_trk()
     await player.next_trk()
     await player.prev_trk()
-    await asyncio.sleep_ms(1000)
-    await player.stop()
-    print('demo complete')
+    await asyncio.sleep(1)
+    """
+    commands = get_commands('test.txt')
+    await run_commands(commands)
 
 
 if __name__ == '__main__':
