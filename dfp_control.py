@@ -109,10 +109,11 @@ class DfPlayer:
 
 
 async def main():
-    """ test CommandHandler and UartTxRx """
+    """ test DFPlayer controller """
     
     def get_commands(cmd_file):
-        """ read in and tokenise command file """
+        """ read in and tokenise command file
+            - work-in-progress! """
         commands = []
         with open(cmd_file) as fp:
             for line in fp:
@@ -123,12 +124,15 @@ async def main():
         return commands
 
     async def run_commands(commands_):
-        """ control DFP from simple text script """
+        """ control DFP from simple text commands
+            - format is cmd: str, parameters: (p0: str, ...)
+            - work-in-progress! """
         print('In run_commands()')
         for item in commands_:
             cmd = item[0]
             params = item[1]
             if cmd == 'trk':
+                # parameters required as int
                 params = [int(p) for p in params]
                 await player.track_sequence(params)
             elif cmd == 'nxt':
