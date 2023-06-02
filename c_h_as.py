@@ -45,7 +45,7 @@ class CommandHandler:
         0x05: 'vol_dec',
         0x06: 'vol_set',  # 0-30
         0x07: 'eq_set',  # 0:normal/1:pop/2:rock/3:jazz/4:classic/5:bass
-        0x08: 'repeat_trk',  # track no. as parameter
+        0x08: 'track_rpt',  # track no. as parameter
         0x0c: 'reset',
         0x0e: 'stop',
         0x11: 'repeat_all',  # 0: stop; 1: start
@@ -71,7 +71,7 @@ class CommandHandler:
 
     # build set of commands that play a track
     # required to clear the track_end_ev event
-    play_set_str = {'next', 'prev', 'track', 'repeat_trk', 'repeat_all'}
+    play_set_str = {'next', 'prev', 'track', 'track_rpt', 'repeat_all'}
     play_set = {0}
     # set comprehension raises an error so simple loop
     for element in play_set_str:
@@ -185,8 +185,7 @@ async def main():
     """ test CommandHandler and UartTxRx """
 
     commands = (('reset', 0), ('vol_set', 15), ('q_vol', 0),
-                ('repeat_trk', 9), ('stop', 0))
-    
+                ('track', 9), ('stop', 0))
 
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
