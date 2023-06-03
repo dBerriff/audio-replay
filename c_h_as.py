@@ -11,10 +11,42 @@ Not all DFP commands are required or have been tested.
 
 """
 
-from machine import UART, Pin
+from machine import UART, Pin, ADC
 import uasyncio as asyncio
 import hex_fns as hex_f
 from uart_os_as import Queue, StreamTR
+
+
+class AdcReader:
+    """ read ADC input """
+    def __init__(self, pin, c_h_):
+        self.adc = ADC(Pin(pin))
+        self.c_h_ = c_h_
+        self.input_u16 = 0
+        self.threshold = 26_500
+        self.loud = asyncio.Event()
+
+    async def get_input(self):
+        """ read and print ADC input """
+        led = Pin(25, Pin.OUT)
+        zero_array = [0, 0, 0, 0, 0, 0, 0, 0]
+        in_array = list(zero_array)
+        ir_len = len(in_array)
+        i = -1
+        while True:
+            if self.c_h_.playing:
+                i += 1
+                i %= ir_len
+                in_array[i] = self.adc.read_u16()
+                if max(in_array) > self.threshold:
+                    self.loud.set()
+                    led.on()
+                    in_array = list(zero_array)
+                else:
+                    led.off()
+            else:
+                led.off()
+            await asyncio.sleep_ms(20)
 
 
 class CommandHandler:
@@ -94,6 +126,7 @@ class CommandHandler:
         self.track_count = 0  # for info
         self.current_track = 0  # for info
         self.ack_ev = asyncio.Event()
+        self.playing = False
         self.track_end_ev = asyncio.Event()
         self.error_ev = asyncio.Event()  # not currently monitored
         self.verbose = True
@@ -128,6 +161,7 @@ class CommandHandler:
         # if command plays a track, clear track_end_ev
         if cmd_hex in self.play_set:
             self.track_end_ev.clear()
+            self.playing = True
         await self.sender(self.tx_word)
         # ack_ev is set in parse_rx_message()
         await self.ack_ev.wait()
@@ -156,6 +190,7 @@ class CommandHandler:
             elif rx_cmd == 0x3d:  # sd_finish
                 self.current_track = rx_param
                 self.track_end_ev.set()
+                self.playing = False
             elif rx_cmd == 0x3f:  # q_init
                 if rx_param & 0x0002 != 0x0002:
                     raise Exception('DFPlayer error: no TF-card?')
@@ -189,13 +224,16 @@ async def main():
     uart.init(tx=Pin(0), rx=Pin(1))
     stream_tr = StreamTR(uart, 10, Queue(20))
     c_h = CommandHandler(stream_tr)
+    adc = AdcReader(26, c_h)
 
     # start receive and send tasks
     asyncio.create_task(c_h.stream_tr.receiver())
     asyncio.create_task(c_h.consume_rx_data())
+    asyncio.create_task(adc.get_input())
 
-    commands = (('reset', 0), ('zzz', 3), ('vol_set', 15), ('zzz', 1), ('q_vol', 0),
-                ('zzz', 1), ('track', 76), ('track', 15), ('track', 30))
+    commands = (('reset', 0), ('zzz', 3), ('vol_set', 30), ('zzz', 1), ('q_vol', 0),
+                ('zzz', 1), ('track', 76), ('track', 15), ('track', 30),
+                ('zzz', 1), ('track', 78), ('zzz', 1))
 
     for cmd in commands:
         print(cmd)
@@ -213,7 +251,7 @@ async def main():
             else:
                 # DFP recovery pause - required?
                 await asyncio.sleep_ms(20)
-    
+
 
 if __name__ == '__main__':
     try:
