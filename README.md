@@ -27,3 +27,9 @@ See: https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP docum
 **uart_os_as**: MicroPython script. *asyncio* version. Includes Queue and StreamTR classes
 
 **hex_fns**: MicroPython script. Functions to 16-bit register MSB and LSB arithmetic; and general string-formatting for print()
+
+Notes:
+
+- repeat modes are problematic (all-tracks mode does not work; single track mode persists) and have not been implemented.
+
+- folders have not been used.
