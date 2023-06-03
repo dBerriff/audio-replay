@@ -37,6 +37,8 @@ class CommandHandler:
 
     data_template = {0: 0x7E, 1: 0xFF, 2: 0x06, 4: R_FB, 9: 0xEF}
     
+    # repeat and sleep commands removed as problematic
+    # use software to emulate
     hex_str = {
         0x01: 'next',
         0x02: 'prev',
@@ -45,10 +47,9 @@ class CommandHandler:
         0x05: 'vol_dec',
         0x06: 'vol_set',  # 0-30
         0x07: 'eq_set',  # 0:normal/1:pop/2:rock/3:jazz/4:classic/5:bass
-        0x08: 'track_rpt',  # track no. as parameter
         0x0c: 'reset',
+        0x0d: 'play',
         0x0e: 'stop',
-        0x11: 'repeat_all',  # 0: stop; 1: start
         0x3a: 'media_insert',
         0x3b: 'media_remove',
         0x3d: 'sd_fin',
@@ -71,7 +72,7 @@ class CommandHandler:
 
     # build set of commands that play a track
     # required to clear the track_end_ev event
-    play_set_str = {'next', 'prev', 'track', 'track_rpt', 'repeat_all'}
+    play_set_str = {'next', 'prev', 'track'}
     play_set = {0}
     # set comprehension raises an error so simple loop
     for element in play_set_str:
@@ -184,9 +185,6 @@ class CommandHandler:
 async def main():
     """ test CommandHandler and UartTxRx """
 
-    commands = (('reset', 0), ('vol_set', 15), ('q_vol', 0),
-                ('track', 9), ('stop', 0))
-
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
     stream_tr = StreamTR(uart, 10, Queue(20))
@@ -196,13 +194,26 @@ async def main():
     asyncio.create_task(c_h.stream_tr.receiver())
     asyncio.create_task(c_h.consume_rx_data())
 
+    commands = (('reset', 0), ('zzz', 3), ('vol_set', 15), ('zzz', 1), ('q_vol', 0),
+                ('zzz', 1), ('track', 76), ('track', 15), ('track', 30))
+
     for cmd in commands:
         print(cmd)
-        await c_h.send_command(cmd[0], cmd[1])
-        await c_h.ack_ev.wait()
-        await asyncio.sleep(2)
-        c_h.print_rx_message()
-
+        command = cmd[0]
+        parameter = cmd[1]
+        if command == 'zzz':
+            await asyncio.sleep(parameter)
+        else:
+            await c_h.send_command(command, parameter)
+            await c_h.ack_ev.wait()  # wait for DFPlayer ACK
+            c_h.print_rx_message()
+            # if playing, wait for track end
+            if command in c_h.play_set_str:
+                await c_h.track_end_ev.wait()
+            else:
+                # DFP recovery pause - required?
+                await asyncio.sleep_ms(20)
+    
 
 if __name__ == '__main__':
     try:

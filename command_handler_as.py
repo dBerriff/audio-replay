@@ -40,16 +40,21 @@ class CommandHandler:
         0x05: 'vol_dec',
         0x06: 'vol_set',  # 0-30
         0x07: 'eq_set',  # 0:normal/1:pop/2:rock/3:jazz/4:classic/5:bass
-        0x08: 'repeat_trk',  # track # as parameter; 3.6.3
+        #0x08: 'track_rpt',  # track no.; repeat mode: no way to unset?
+        0x0a: 'sleep',  # stops responding! power-off to reset?
         0x0c: 'reset',
         0x0d: 'play',
         0x0e: 'stop',
-        0x0f: 'folder_trk',  # play: MSB: folder; LSB: track
-        0x11: 'repeat_all',  # root folder; 0: stop; 1: start
+        """
+        # note different parameters!
+        # must be sent during playback!
+        0x11: 'repeat_all',  # 0: off; 1: on; parameter 0 locks up?
+        0x19: 'single_rpt',  # 0: on; 1: off
+        """
         0x3a: 'media_insert',
         0x3b: 'media_remove',
         0x3d: 'sd_fin',
-        0x3f: 'q_init',  # 02: SD-card
+        0x3f: 'q_init',  # 02: TF-card
         0x40: 'error',
         0x41: 'ack',
         0x42: 'q_status',  # 0: stopped; 1: playing; 2: paused
@@ -58,7 +63,7 @@ class CommandHandler:
         0x48: 'q_sd_files',  # in root directory
         0x4c: 'q_sd_trk'
         }
-    
+
     # inverse dictionary mapping
     str_hex = {value: key for key, value in hex_str.items()}
 

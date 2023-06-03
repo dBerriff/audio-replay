@@ -156,28 +156,6 @@ async def main():
     
     print('Send commands')
     cmd_file = 'test.txt'
-    """
-    await player.reset()
-    await player.vol_set(20)
-    await player.q_vol()
-    await player.q_sd_files()  # return number of files
-
-    await player.track_sequence((76, 9, 25))
-    await asyncio.sleep(2)
-    await player.track_sequence((76, 65))
-    await asyncio.sleep(2)    
-    await player.track_sequence((76, 75))
-
-    await player.play()
-    await player.next_trk()
-    await player.next_trk()
-    await player.prev_trk()
-    await player.track(61)
-    await player.next_trk()
-    await player.next_trk()
-    await player.prev_trk()
-    await asyncio.sleep(1)
-    """
     commands = get_command_lines(cmd_file)
     await run_commands(commands)
 
