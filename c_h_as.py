@@ -148,18 +148,22 @@ class CommandHandler:
         checksum_ += buf_[self.C_L]  # lsb
         return (byte_sum + checksum_) & 0xffff
 
-    async def send_command(self, cmd_str, param=0):
+    async def send_command_str(self, cmd_str, param=0):
+        """ coro: set tx bytearray values and send
+            - commands set own timing """
+        await self.send_command(self.str_hex[cmd_str], param)
+
+    async def send_command(self, cmd, param=0):
         """ coro: set tx bytearray values and send
             - commands set own timing """
         self.ack_ev.clear()  # require ACK
-        cmd_hex = self.str_hex[cmd_str]
-        self.tx_word[self.CMD] = cmd_hex
+        self.tx_word[self.CMD] = cmd
         self.tx_word[self.P_H], self.tx_word[self.P_L] = \
             hex_f.slice_reg16(param)
         self.tx_word[self.C_H], self.tx_word[self.C_L] = \
             self.get_checksum()
         # if command plays a track, clear track_end_ev
-        if cmd_hex in self.play_set:
+        if cmd in self.play_set:
             self.track_end_ev.clear()
             self.playing = True
         await self.sender(self.tx_word)
@@ -231,7 +235,7 @@ async def main():
     asyncio.create_task(c_h.consume_rx_data())
     asyncio.create_task(adc.get_input())
 
-    commands = (('reset', 0), ('zzz', 3), ('vol_set', 30), ('zzz', 1), ('q_vol', 0),
+    commands = (('reset', 0), ('zzz', 3), ('vol_set', 15), ('zzz', 1), ('q_vol', 0),
                 ('zzz', 1), ('track', 76), ('track', 15), ('track', 30),
                 ('zzz', 1), ('track', 78), ('zzz', 1))
 
@@ -242,7 +246,7 @@ async def main():
         if command == 'zzz':
             await asyncio.sleep(parameter)
         else:
-            await c_h.send_command(command, parameter)
+            await c_h.send_command_str(command, parameter)
             await c_h.ack_ev.wait()  # wait for DFPlayer ACK
             c_h.print_rx_message()
             # if playing, wait for track end

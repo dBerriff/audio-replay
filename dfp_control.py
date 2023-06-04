@@ -22,81 +22,70 @@ class DfPlayer:
                 -- signifies online storage: SD card
                 -- not currently checked by software
         """
-        await self.c_h.send_command('reset', 0)
-        await self.c_h.ack_ev.wait()
+        await self.c_h.send_command_str('reset', 0)
         await asyncio.sleep_ms(2000)
-        if self.c_h.rx_cmd != 0x3f:
-            raise Exception('DFPlayer could not be reset')
+        if self.c_h.rx_cmd == 0x3f:
+            print(f'DFPlayer reset with code: {self.c_h.rx_param}')
         else:
-            print('DFPlayer reset')
+            raise Exception('DFPlayer could not be reset')
+
 
     async def next_trk(self):
         """ coro: play next track """
-        await self.c_h.send_command('next', 0)
-        await self.c_h.ack_ev.wait()
+        await self.c_h.send_command_str('next', 0)
         self.c_h.current_track += 1
         print(f'Track: {self.c_h.current_track}')
         await self.c_h.track_end_ev.wait()
 
     async def prev_trk(self):
         """ coro: play previous track """
-        await self.c_h.send_command('prev', 0)
-        await self.c_h.ack_ev.wait()
+        await self.c_h.send_command_str('prev', 0)
         self.c_h.current_track -= 1
         print(f'Track: {self.c_h.current_track}')
         await self.c_h.track_end_ev.wait()
 
     async def track(self, track_=1):
         """ coro: play track n """
-        await self.c_h.send_command('track', track_)
-        await self.c_h.ack_ev.wait()
+        await self.c_h.send_command_str('track', track_)
         self.c_h.current_track = track_
         print(f'Track: {track_}')
         await self.c_h.track_end_ev.wait()
 
     async def stop(self):
         """ coro: stop playing """
-        await self.c_h.send_command('stop', 0)
-        await self.c_h.ack_ev.wait()
+        await self.c_h.send_command_str('stop', 0)
         self.c_h.track_end_ev.set()
         print('DFPlayer stopped')
 
     async def vol_set(self, level):
         """ coro: set volume level 0-30 """
         level = min(30, level)
-        await self.c_h.send_command('vol_set', level)
-        await self.c_h.ack_ev.wait()
+        await self.c_h.send_command_str('vol_set', level)
         self.c_h.volume_level = level
 
     async def q_vol(self):
         """ coro: query volume level """
-        await self.c_h.send_command('q_vol')
-        await self.c_h.ack_ev.wait()
+        await self.c_h.send_command_str('q_vol')
         print(f'Volume level: {self.c_h.volume} (0-30)')
 
     async def q_sd_files(self):
         """ coro: query number of SD files (in root?) """
-        await self.c_h.send_command('q_sd_files')
+        await self.c_h.send_command_str('q_sd_files')
         await self.c_h.ack_ev.wait()
         print(f'Number of SD-card files: {self.c_h.track_count}')
 
     async def q_sd_trk(self):
         """ coro: query current track number """
-        await self.c_h.send_command('q_sd_trk')
-        await self.c_h.ack_ev.wait()
+        await self.c_h.send_command_str('q_sd_trk')
         print(f'Current track: {self.c_h.current_track}')
 
     async def track_sequence(self, sequence):
         """ coro: play sequence of tracks by number """
         for track_ in sequence:
-            await self.c_h.send_command('track', track_)
-            await self.c_h.ack_ev.wait()
+            await self.c_h.send_command_str('track', track_)
+            self.c_h.current_track = track_
             print(f'Track: {track_}')
             await self.c_h.track_end_ev.wait()
-
-    async def play(self):
-        """ replace 'play' command """
-        await self.track(1)
 
 
 async def main():
@@ -129,13 +118,13 @@ async def main():
             cmd = tokens[0]
             params = tokens[1:]
             
-            if cmd == 'trk':
+            if cmd == 'zzz':
+                param = int(params[0])
+                await asyncio.sleep(param)
+            elif cmd == 'trk':
                 # parameters required as int
                 params = [int(p) for p in params]
                 await player.track_sequence(params)
-            elif cmd == 'zzz':
-                param = int(params[0])
-                await asyncio.sleep(param)
             elif cmd == 'nxt':
                 await player.next_trk()
             elif cmd == 'prv':
