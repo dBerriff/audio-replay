@@ -57,10 +57,10 @@ class Queue:
 class StreamTR:
     """ implement UART Tx and Rx as stream_tr """
 
-    def __init__(self, stream, buf_len, rx_queue):
+    def __init__(self, stream, buf_len):
         self.stream = stream
         self.buf_len = buf_len
-        self.rx_queue = rx_queue
+        self.rx_queue = Queue(20)
         self.s_writer = asyncio.StreamWriter(self.stream, {})
         self.s_reader = asyncio.StreamReader(self.stream)
         self.in_buf = bytearray(buf_len)
@@ -82,24 +82,6 @@ class StreamTR:
             await asyncio.sleep_ms(20)
 
 
-async def blink():
-    """ coro: blink onboard LED """
-    led = Pin('LED', Pin.OUT)
-    while True:
-        led.value(1)
-        await asyncio.sleep_ms(200)
-        led.value(0)
-        await asyncio.sleep_ms(500)
-        
-
-def led_off():
-    """ turn off onboard LED """
-    led = Pin('LED', Pin.OUT)
-    led.value(0)
-
-
-
-
 async def main():
     """ coro: test module classes """
 
@@ -116,10 +98,8 @@ async def main():
     
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
-    stream_tr = StreamTR(uart, 10, Queue(20))
-    task0 = asyncio.create_task(stream_tr.receiver())
-    # run blink as demonstration of additional task
-    task1 = asyncio.create_task(blink())
+    stream_tr = StreamTR(uart, buf_len=10)
+    asyncio.create_task(stream_tr.receiver())
     
     for i in range(10):
         data[0] = i
@@ -127,9 +107,6 @@ async def main():
         print(f'{i} Tx item')
 
     await asyncio.sleep_ms(1000)
-    task0.cancel()
-    task1.cancel()
-    led_off()
 
     # demonstrate that items have been added to the queue
     q_dump(stream_tr.rx_queue, name='Receive ')

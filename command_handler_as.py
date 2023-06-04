@@ -140,7 +140,7 @@ class CommandHandler:
             if self.check_checksum(message_):
                 print(f'{rx_cmd}: error in checksum')
                 return
-            rx_param = hex_f.set_reg16(
+            rx_param = hex_f.m_l_reg16(
                 message_[self.P_H], message_[self.P_L])
 
             # check for specific messages that require action

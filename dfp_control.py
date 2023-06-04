@@ -3,7 +3,7 @@
 
 import uasyncio as asyncio
 from machine import Pin, UART
-from uart_os_as import Queue, StreamTR
+from uart_os_as import StreamTR
 from c_h_as import CommandHandler
 
 
@@ -12,15 +12,14 @@ class DfPlayer:
     def __init__(self):
         uart = UART(0, 9600)
         uart.init(tx=Pin(0), rx=Pin(1))
-        stream_tr = StreamTR(uart, 10, Queue(20))
+        stream_tr = StreamTR(uart, buf_len=10)
         self.c_h = CommandHandler(stream_tr)
 
     async def reset(self):
         """ coro: reset the DFPlayer
             - with SD card response should be:
                 Rx word: q_init 0x3f 0x0002
-                -- signifies online storage: SD card
-                -- not currently checked by software
+                -- signifies online storage, SD card
         """
         await self.c_h.send_command_str('reset', 0)
         await asyncio.sleep_ms(2000)
@@ -28,7 +27,6 @@ class DfPlayer:
             print(f'DFPlayer reset with code: {self.c_h.rx_param}')
         else:
             raise Exception('DFPlayer could not be reset')
-
 
     async def next_trk(self):
         """ coro: play next track """
@@ -44,7 +42,7 @@ class DfPlayer:
         print(f'Track: {self.c_h.current_track}')
         await self.c_h.track_end_ev.wait()
 
-    async def track(self, track_=1):
+    async def track(self, track_):
         """ coro: play track n """
         await self.c_h.send_command_str('track', track_)
         self.c_h.current_track = track_

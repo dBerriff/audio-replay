@@ -14,39 +14,38 @@ Not all DFP commands are required or have been tested.
 from machine import UART, Pin, ADC
 import uasyncio as asyncio
 import hex_fns as hex_f
-from uart_os_as import Queue, StreamTR
+from uart_os_as import StreamTR
 
 
 class AdcReader:
     """ read ADC input """
-    def __init__(self, pin, c_h_):
+    def __init__(self, pin, c_h):
         self.adc = ADC(Pin(pin))
-        self.c_h_ = c_h_
+        self.c_h = c_h
         self.input_u16 = 0
-        self.threshold = 26_500
+        self.threshold = 28_000
+        self.ir_len = 8  # store last 8 readings
         self.loud = asyncio.Event()
 
     async def get_input(self):
         """ read and print ADC input """
         led = Pin(25, Pin.OUT)
-        zero_array = [0, 0, 0, 0, 0, 0, 0, 0]
-        in_array = list(zero_array)
-        ir_len = len(in_array)
-        i = -1
+        led.off()
         while True:
-            if self.c_h_.playing:
-                i += 1
-                i %= ir_len
+            in_array = [0] * self.ir_len
+            i = 0
+            await self.c_h.playing_ev.wait()
+            while self.c_h.playing_ev.is_set():
                 in_array[i] = self.adc.read_u16()
                 if max(in_array) > self.threshold:
                     self.loud.set()
                     led.on()
-                    in_array = list(zero_array)
                 else:
                     led.off()
-            else:
-                led.off()
-            await asyncio.sleep_ms(20)
+                i += 1
+                i %= self.ir_len
+                await asyncio.sleep_ms(20)
+            led.off()
 
 
 class CommandHandler:
@@ -59,9 +58,9 @@ class CommandHandler:
     BUF_SIZE = const(10)
     # data-byte indices
     CMD = const(3)
-    P_H = const(5)  # parameter
+    P_M = const(5)  # parameter
     P_L = const(6)
-    C_H = const(7)  # checksum
+    C_M = const(7)  # checksum
     C_L = const(8)
 
     R_FB = const(1)  # require ACK feedback
@@ -80,7 +79,7 @@ class CommandHandler:
         0x06: 'vol_set',  # 0-30
         0x07: 'eq_set',  # 0:normal/1:pop/2:rock/3:jazz/4:classic/5:bass
         0x0c: 'reset',
-        0x0d: 'play',
+        0x0d: 'play',  # normally use 'track'
         0x0e: 'stop',
         0x3a: 'media_insert',
         0x3b: 'media_remove',
@@ -98,18 +97,10 @@ class CommandHandler:
     # inverse dictionary mapping
     str_hex = {value: key for key, value in hex_str.items()}
 
-    # add Rx-only codes
-    hex_str[0x3a] = 'media_insert'
-    hex_str[0x3b] = 'media_remove'
-
     # build set of commands that play a track
-    # required to clear the track_end_ev event
+    # required to set track play Events
     play_set_str = {'next', 'prev', 'track'}
-    play_set = {0}
-    # set comprehension raises an error so simple loop
-    for element in play_set_str:
-        play_set.add(str_hex[element])
-    play_set.remove(0)
+    play_set = {0x01, 0x02, 0x03}
 
     def __init__(self, stream):
         self.stream_tr = stream
@@ -126,10 +117,9 @@ class CommandHandler:
         self.track_count = 0  # for info
         self.current_track = 0  # for info
         self.ack_ev = asyncio.Event()
-        self.playing = False
+        self.playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
         self.error_ev = asyncio.Event()  # not currently monitored
-        self.verbose = True
 
     def print_rx_message(self):
         """ for testing """
@@ -143,8 +133,8 @@ class CommandHandler:
 
     def check_checksum(self, buf_):
         """ returns 0 for consistent checksum """
-        byte_sum = sum(buf_[1:self.C_H])
-        checksum_ = buf_[self.C_H] << 8  # msb
+        byte_sum = sum(buf_[1:self.C_M])
+        checksum_ = buf_[self.C_M] << 8  # msb
         checksum_ += buf_[self.C_L]  # lsb
         return (byte_sum + checksum_) & 0xffff
 
@@ -158,20 +148,21 @@ class CommandHandler:
             - commands set own timing """
         self.ack_ev.clear()  # require ACK
         self.tx_word[self.CMD] = cmd
-        self.tx_word[self.P_H], self.tx_word[self.P_L] = \
+        # slice msb and lsb
+        self.tx_word[self.P_M], self.tx_word[self.P_L] = \
             hex_f.slice_reg16(param)
-        self.tx_word[self.C_H], self.tx_word[self.C_L] = \
+        self.tx_word[self.C_M], self.tx_word[self.C_L] = \
             self.get_checksum()
-        # if command plays a track, clear track_end_ev
+        # track-is-playing Events
         if cmd in self.play_set:
             self.track_end_ev.clear()
-            self.playing = True
+            self.playing_ev.set()
         await self.sender(self.tx_word)
         # ack_ev is set in parse_rx_message()
         await self.ack_ev.wait()
 
     async def consume_rx_data(self):
-        """ coro: parses and prints received data """
+        """ coro: consume and parse received data """
 
         def parse_rx_message(message_):
             """ parse incoming message_ parameters and
@@ -184,17 +175,18 @@ class CommandHandler:
                 # continue but log
                 print(f'{rx_cmd}: error in checksum')
                 return
-            rx_param = hex_f.set_reg16(
-                message_[self.P_H], message_[self.P_L])
+            # combine parameter msb and lsb
+            rx_param = hex_f.m_l_reg16(
+                message_[self.P_M], message_[self.P_L])
 
             # check for specific messages that require action
             if rx_cmd == 0x41:  # ack
                 self.ack_ev.set()
                 return  # skip object update
             elif rx_cmd == 0x3d:  # sd_finish
-                self.current_track = rx_param
+                # self.current_track = rx_param  # uncomment if repeat used
                 self.track_end_ev.set()
-                self.playing = False
+                self.playing_ev.clear()
             elif rx_cmd == 0x3f:  # q_init
                 if rx_param & 0x0002 != 0x0002:
                     raise Exception('DFPlayer error: no TF-card?')
@@ -226,7 +218,7 @@ async def main():
 
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
-    stream_tr = StreamTR(uart, 10, Queue(20))
+    stream_tr = StreamTR(uart, buf_len=10)
     c_h = CommandHandler(stream_tr)
     adc = AdcReader(26, c_h)
 
@@ -235,6 +227,8 @@ async def main():
     asyncio.create_task(c_h.consume_rx_data())
     asyncio.create_task(adc.get_input())
 
+    # (cmd: str, parameter: int) list for testing
+    # 'zzz' is added for sleep calls
     commands = (('reset', 0), ('zzz', 3), ('vol_set', 15), ('zzz', 1), ('q_vol', 0),
                 ('zzz', 1), ('track', 76), ('track', 15), ('track', 30),
                 ('zzz', 1), ('track', 78), ('zzz', 1))

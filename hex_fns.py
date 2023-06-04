@@ -27,14 +27,14 @@ def reg16_str(r):
     msb, lsb = slice_reg16(r)
     return '0x' + byte_digits(msb) + byte_digits(lsb)
 
-def set_reg16(msb, lsb):
+def m_l_reg16(msb, lsb):
     """ combine msb and lsb for 16-bit value """
     value = msb << 8
     value += lsb
     return value & 0xffff
 
-def set_reg16_str(msb, lsb):
-    return reg16_str(set_reg16(msb, lsb))
+def m_l_reg16_str(msb, lsb):
+    return reg16_str(m_l_reg16(msb, lsb))
 
 def byte_array_str(ba):
     """ return str(hex value) of a bytearray """
