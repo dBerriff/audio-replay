@@ -98,7 +98,7 @@ async def main():
 
     async def run_commands(commands_):
         """ control DFP from simple text commands
-            - format is cmd: str, parameters: (p0: str, ...)
+            - format is: "cmd parameter" or "cmd, parameter"
             - work-in-progress! """
 
         for line in commands_:
