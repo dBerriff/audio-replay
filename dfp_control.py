@@ -32,21 +32,18 @@ class DfPlayer:
         """ coro: play next track """
         await self.c_h.send_command_str('next', 0)
         self.c_h.current_track += 1
-        print(f'Track: {self.c_h.current_track}')
         await self.c_h.track_end_ev.wait()
 
     async def prev_trk(self):
         """ coro: play previous track """
         await self.c_h.send_command_str('prev', 0)
         self.c_h.current_track -= 1
-        print(f'Track: {self.c_h.current_track}')
         await self.c_h.track_end_ev.wait()
 
     async def track(self, track_):
         """ coro: play track n """
         await self.c_h.send_command_str('track', track_)
         self.c_h.current_track = track_
-        print(f'Track: {track_}')
         await self.c_h.track_end_ev.wait()
 
     async def stop(self):
@@ -82,7 +79,6 @@ class DfPlayer:
         for track_ in sequence:
             await self.c_h.send_command_str('track', track_)
             self.c_h.current_track = track_
-            print(f'Track: {track_}')
             await self.c_h.track_end_ev.wait()
 
 
@@ -115,6 +111,7 @@ async def main():
             tokens = line.split(' ')
             cmd = tokens[0]
             params = tokens[1:]
+            print(f'{cmd} {params}')
             
             if cmd == 'zzz':
                 param = int(params[0])
@@ -137,7 +134,7 @@ async def main():
                 await player.stop()
 
     player = DfPlayer()
-
+    
     asyncio.create_task(player.c_h.stream_tr.receiver())
     asyncio.create_task(player.c_h.consume_rx_data())
     

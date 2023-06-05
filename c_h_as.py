@@ -98,7 +98,7 @@ class CommandHandler:
     str_hex = {value: key for key, value in hex_str.items()}
 
     # build set of commands that play a track
-    # required to set track play Events
+    # required to set track-play Events
     play_set_str = {'next', 'prev', 'track'}
     play_set = {0x01, 0x02, 0x03}
 
@@ -241,7 +241,6 @@ async def main():
             await asyncio.sleep(parameter)
         else:
             await c_h.send_command_str(command, parameter)
-            await c_h.ack_ev.wait()  # wait for DFPlayer ACK
             c_h.print_rx_message()
             # if playing, wait for track end
             if command in c_h.play_set_str:
