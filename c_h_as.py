@@ -22,30 +22,18 @@ class AdcReader:
     def __init__(self, pin, c_h):
         self.adc = ADC(Pin(pin))
         self.c_h = c_h
-        self.input_u16 = 0
         self.threshold = 28_000
-        self.ir_len = 8  # store last 8 readings
-        self.loud = asyncio.Event()
+        self.trigger_ev = asyncio.Event()
 
-    async def get_input(self):
-        """ read and print ADC input """
-        led = Pin(25, Pin.OUT)
-        led.off()
+    async def check_trigger(self):
+        """ read ADC input while track playing """
         while True:
-            in_array = [0] * self.ir_len
-            i = 0
             await self.c_h.playing_ev.wait()
             while self.c_h.playing_ev.is_set():
-                in_array[i] = self.adc.read_u16()
-                if max(in_array) > self.threshold:
-                    self.loud.set()
-                    led.on()
-                else:
-                    led.off()
-                i += 1
-                i %= self.ir_len
+                print('in buffer_adc playing')
+                if self.adc.read_u16() > self.threshold:
+                    self.trigger_ev.set()
                 await asyncio.sleep_ms(20)
-            led.off()
 
 
 class CommandHandler:
@@ -213,6 +201,16 @@ class CommandHandler:
             parse_rx_message(self.rx_word)
 
 
+async def while_playing(playing, triggered):
+    while playing.is_set():
+        if triggered.is_set():
+            print('loud')
+            triggered.clear()
+        else:
+            print('not loud')
+        await asyncio.sleep_ms(200)
+
+
 async def main():
     """ test CommandHandler and UartTxRx """
 
@@ -225,7 +223,7 @@ async def main():
     # start receive and send tasks
     asyncio.create_task(c_h.stream_tr.receiver())
     asyncio.create_task(c_h.consume_rx_data())
-    asyncio.create_task(adc.get_input())
+    # asyncio.create_task(adc.check_trigger())
 
     # (cmd: str, parameter: int) list for testing
     # 'zzz' is added for sleep calls
@@ -244,7 +242,7 @@ async def main():
             c_h.print_rx_message()
             # if playing, wait for track end
             if command in c_h.play_set_str:
-                await c_h.track_end_ev.wait()
+                await while_playing(c_h.playing_ev, adc.trigger_ev)
             else:
                 # DFP recovery pause - required?
                 await asyncio.sleep_ms(20)
