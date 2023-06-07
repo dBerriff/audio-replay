@@ -30,7 +30,6 @@ class AdcReader:
         while True:
             await self.c_h.playing_ev.wait()
             while self.c_h.playing_ev.is_set():
-                print('in buffer_adc playing')
                 if self.adc.read_u16() > self.threshold:
                     self.trigger_ev.set()
                 await asyncio.sleep_ms(20)
@@ -59,36 +58,29 @@ class CommandHandler:
     # repeat and sleep commands removed as problematic
     # use software to emulate
     hex_str = {
-        0x01: 'next',
-        0x02: 'prev',
+        # commands
         0x03: 'track',  # 1-3000
-        0x04: 'vol_inc',
-        0x05: 'vol_dec',
         0x06: 'vol_set',  # 0-30
         0x07: 'eq_set',  # 0:normal/1:pop/2:rock/3:jazz/4:classic/5:bass
         0x0c: 'reset',
-        0x0d: 'play',  # normally use 'track'
         0x0e: 'stop',
+        # information return
         0x3a: 'media_insert',
         0x3b: 'media_remove',
-        0x3d: 'sd_fin',
-        0x3f: 'q_init',  # 02: TF-card
+        0x3d: 'tf_fin',  # sd track finished
+        0x3f: 'q_init',  # returns: 02 for TF-card
         0x40: 'error',
         0x41: 'ack',
+        # query status
         0x42: 'q_status',  # 0: stopped; 1: playing; 2: paused
         0x43: 'q_vol',
         0x44: 'q_eq',
-        0x48: 'q_sd_files',  # in root directory
-        0x4c: 'q_sd_trk'
+        0x48: 'q_tf_files',  # number of files, in root directory
+        0x4c: 'q_tf_trk'
         }
     
     # inverse dictionary mapping
     str_hex = {value: key for key, value in hex_str.items()}
-
-    # build set of commands that play a track
-    # required to set track-play Events
-    play_set_str = {'next', 'prev', 'track'}
-    play_set = {0x01, 0x02, 0x03}
 
     def __init__(self, stream):
         self.stream_tr = stream
@@ -102,8 +94,8 @@ class CommandHandler:
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
         self.volume = 0  # for info
-        self.track_count = 0  # for info
-        self.current_track = 0  # for info
+        self.track_count = 0
+        self.current_track = 0
         self.ack_ev = asyncio.Event()
         self.playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
@@ -112,7 +104,7 @@ class CommandHandler:
     def print_rx_message(self):
         """ for testing """
         print('Latest Rx message:', hex_f.byte_str(self.rx_cmd),
-              hex_f.byte_str(self.rx_param))
+              hex_f.byte_str(self.rx_param), self.rx_param)
 
     def get_checksum(self):
         """ return the 2's complement checksum of:
@@ -141,8 +133,9 @@ class CommandHandler:
             hex_f.slice_reg16(param)
         self.tx_word[self.C_M], self.tx_word[self.C_L] = \
             self.get_checksum()
-        # track-is-playing Events
-        if cmd in self.play_set:
+        # play track
+        if cmd == 0x03:
+            self.current_track = param
             self.track_end_ev.clear()
             self.playing_ev.set()
         await self.sender(self.tx_word)
@@ -201,18 +194,18 @@ class CommandHandler:
             parse_rx_message(self.rx_word)
 
 
-async def while_playing(playing, triggered):
-    while playing.is_set():
-        if triggered.is_set():
-            print('loud')
-            triggered.clear()
-        else:
-            print('not loud')
-        await asyncio.sleep_ms(200)
-
-
 async def main():
     """ test CommandHandler and UartTxRx """
+
+    async def while_playing(playing, triggered):
+        """ check for 'loud' Event being triggered """
+        while playing.is_set():
+            if triggered.is_set():
+                print('t...')
+                triggered.clear()
+            else:
+                pass
+            await asyncio.sleep_ms(200)
 
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
@@ -223,12 +216,12 @@ async def main():
     # start receive and send tasks
     asyncio.create_task(c_h.stream_tr.receiver())
     asyncio.create_task(c_h.consume_rx_data())
-    # asyncio.create_task(adc.check_trigger())
+    asyncio.create_task(adc.check_trigger())
 
     # (cmd: str, parameter: int) list for testing
     # 'zzz' is added for sleep calls
-    commands = (('reset', 0), ('zzz', 3), ('vol_set', 15), ('zzz', 1), ('q_vol', 0),
-                ('zzz', 1), ('track', 76), ('track', 15), ('track', 30),
+    commands = (('reset', 0), ('zzz', 3), ('vol_set', 30), ('zzz', 1), ('q_vol', 0),
+                ('zzz', 1), ('q_tf_files', 0), ('zzz', 1), ('track', 76), ('track', 15), ('track', 30),
                 ('zzz', 1), ('track', 78), ('zzz', 1))
 
     for cmd in commands:
@@ -241,11 +234,8 @@ async def main():
             await c_h.send_command_str(command, parameter)
             c_h.print_rx_message()
             # if playing, wait for track end
-            if command in c_h.play_set_str:
+            if command == 'track':
                 await while_playing(c_h.playing_ev, adc.trigger_ev)
-            else:
-                # DFP recovery pause - required?
-                await asyncio.sleep_ms(20)
 
 
 if __name__ == '__main__':

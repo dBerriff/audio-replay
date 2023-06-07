@@ -14,6 +14,9 @@ class DfPlayer:
         uart.init(tx=Pin(0), rx=Pin(1))
         stream_tr = StreamTR(uart, buf_len=10)
         self.c_h = CommandHandler(stream_tr)
+        self.track_min = 1
+        self.track_max = 0
+        self.track = 1
 
     async def reset(self):
         """ coro: reset the DFPlayer
@@ -27,24 +30,42 @@ class DfPlayer:
             print(f'DFPlayer reset with code: {self.c_h.rx_param}')
         else:
             raise Exception('DFPlayer could not be reset')
+        # get number of TF-card files for track_max
+        await self.c_h.send_command_str('q_tf_files')
+        await asyncio.sleep_ms(200)
+        self.track_max = self.c_h.track_count
+        print(f'Number of TF-card files: {self.track_max}')
+
+    async def play_trk(self, track):
+        """ coro: play track n """
+        print(track)
+        self.track = track
+        self.c_h.current_track = track
+        await self.c_h.send_command_str('track', track)
+        await self.c_h.track_end_ev.wait()
 
     async def next_trk(self):
         """ coro: play next track """
-        await self.c_h.send_command_str('next', 0)
-        self.c_h.current_track += 1
-        await self.c_h.track_end_ev.wait()
+        self.track += 1
+        if self.track > self.track_max:
+            self.track = self.track_min
+        await self.play_trk(self.track)
 
     async def prev_trk(self):
         """ coro: play previous track """
-        await self.c_h.send_command_str('prev', 0)
-        self.c_h.current_track -= 1
-        await self.c_h.track_end_ev.wait()
-
-    async def track(self, track_):
-        """ coro: play track n """
-        await self.c_h.send_command_str('track', track_)
-        self.c_h.current_track = track_
-        await self.c_h.track_end_ev.wait()
+        self.track -= 1
+        if self.track < self.track_min:
+            self.track = self.track_max
+        await self.play_trk(self.track)
+    
+    async def repeat_trks(self, start, end):
+        """ coro: play range of tracks on repeat"""
+        trk_c = start
+        while trk_c <= end:
+            await self.play_trk(trk_c)
+            trk_c += 1
+            if trk_c > end:
+                trk_c = start
 
     async def stop(self):
         """ coro: stop playing """
@@ -77,9 +98,7 @@ class DfPlayer:
     async def track_sequence(self, sequence):
         """ coro: play sequence of tracks by number """
         for track_ in sequence:
-            await self.c_h.send_command_str('track', track_)
-            self.c_h.current_track = track_
-            await self.c_h.track_end_ev.wait()
+            await self.play_trk(track_)
 
 
 async def main():
