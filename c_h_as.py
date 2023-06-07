@@ -196,18 +196,6 @@ class CommandHandler:
 async def main():
     """ test CommandHandler and UartTxRx
         - can be removed when testing has been completed """
-
-    async def while_playing(playing, triggered):
-        """ check for 'loud' Event being triggered """
-
-        while playing.is_set():
-            if triggered.is_set():
-                print('t...')
-                triggered.clear()
-            else:
-                pass
-            await asyncio.sleep_ms(200)
-
     pass
 
 if __name__ == '__main__':

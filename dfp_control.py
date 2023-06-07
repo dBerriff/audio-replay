@@ -4,7 +4,7 @@
 import uasyncio as asyncio
 from machine import Pin, UART
 from uart_os_as import StreamTR
-from c_h_as import CommandHandler
+from c_h_as import CommandHandler, AdcReader
 
 
 class DfPlayer:
@@ -14,6 +14,7 @@ class DfPlayer:
         uart.init(tx=Pin(0), rx=Pin(1))
         stream_tr = StreamTR(uart, buf_len=10)
         self.c_h = CommandHandler(stream_tr)
+        self.adc = AdcReader(26, self.c_h, 28_000)
         self.track_min = 1
         self.track_max = 0
         self.track = 1
@@ -119,6 +120,18 @@ class DfPlayer:
 async def main():
     """ test DFPlayer controller """
     
+    async def while_playing(playing, trigger):
+        """ check for 'loud' Event being triggered
+            - test function to demonstrate operation """
+        while True:
+            await playing.wait()
+            while playing.is_set():
+                if trigger.is_set():
+                    print('loud!')
+                    # clear to catch next loud event
+                    trigger.clear()
+                await asyncio.sleep_ms(200)
+
     def get_command_lines(filename):
         """ read in command-lines from a text file
             - work-in-progress! """
@@ -169,9 +182,14 @@ async def main():
                 asyncio.create_task(player.repeat_tracks(params[0], params[1]))
 
     player = DfPlayer()
-    
+    # task to receive response words
     asyncio.create_task(player.c_h.stream_tr.receiver())
+    # task to read and parse the response words
     asyncio.create_task(player.c_h.consume_rx_data())
+    # task to monitor ADC input and set a trigger Event above a threshold
+    asyncio.create_task(player.adc.check_vol_trigger())
+    # test task to print a line if the ADC trigger Event has been set
+    asyncio.create_task(while_playing(player.c_h.playing_ev, player.adc.trigger_ev))
     
     print('Send commands')
     cmd_file = 'test.txt'
