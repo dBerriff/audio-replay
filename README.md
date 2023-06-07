@@ -17,8 +17,6 @@ Audacity is recommended as an open-source audio editor.
 
 ### DFPlayer Mini
 
-**command_handler_as.py**: MicroPython script. Deprecated.
-
 **dfp_control.py**: MicroPython script. Controls replay of audio tracks from a DFPlayer Mini (DFP). Requires c_h_as.py, uart_os_as.py and hex_fns.py to be loaded into the microprocessor storage.
 See: https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP documentation. Not all features are implemented on all versions of the DFP 16P. Version tested is: MP3-TF-16P V3.0
 
@@ -28,8 +26,10 @@ See: https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP docum
 
 **hex_fns**: MicroPython script. Functions to 16-bit register MSB and LSB arithmetic; and general string-formatting for print()
 
+**text.txt**: Text file. Commands for dfp_control.py. 'rpt' is run as a task so must be the final command if used. Further commands can be issued if 'rpt' is stopped - see the test code in main().
+
 Notes:
 
-- repeat modes are problematic (all-tracks mode does not work; single track mode persists) and have not been implemented.
-
+- the only 'play' command now used is track(track-number). All other 'play' commands are processed in dfp_control and sent as a series of track() commands.
+- dfp_control: 'rpt' is controlled by repeat_flag; initialised as False so must be set True for track-sequence repeats.
 - folders have not been used.
