@@ -24,7 +24,7 @@ See: https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP docum
 
 **uart_os_as**: MicroPython script. *asyncio* version. Includes Queue and StreamTR classes
 
-**hex_fns**: MicroPython script. Functions to 16-bit register MSB and LSB arithmetic; and general string-formatting for print()
+**hex_fns**: MicroPython script. Functions for print-formatting hex values and processing 16-bit register MSB and LSB values.
 
 **text.txt**: Text file. Commands for dfp_control.py. 'rpt' is run as a task so must be the final command if used. Further commands can be issued if 'rpt' is stopped - see the test code in main().
 
