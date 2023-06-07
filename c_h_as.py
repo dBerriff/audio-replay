@@ -3,7 +3,7 @@
 Control a DFPlayer Mini (DFP) from a Raspberry Pi Pico.
 Requires modules hex_fns and uart_os_as to be loaded onto the Pico.
 See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP documentation
-Not all DFP commands are required or have been tested.
+Most DFP commands are not supported as not required or problematical.
 
 - TF-card is synonymous with microSD Card
 - this version is for TF-cards only
@@ -19,14 +19,15 @@ from uart_os_as import StreamTR
 
 class AdcReader:
     """ read ADC input """
-    def __init__(self, pin, c_h):
+    def __init__(self, pin, c_h, threshold):
         self.adc = ADC(Pin(pin))
         self.c_h = c_h
-        self.threshold = 28_000
+        self.threshold = threshold
         self.trigger_ev = asyncio.Event()
 
-    async def check_trigger(self):
-        """ read ADC input while track playing """
+    async def check_vol_trigger(self):
+        """ read ADC input while track playing
+            set trigger if volume threshold exceeded """
         while True:
             await self.c_h.playing_ev.wait()
             while self.c_h.playing_ev.is_set():
@@ -40,6 +41,8 @@ class CommandHandler:
         - see Flyron Technology Co documentation for references
         - www.flyrontech.com
         - coro is short for coroutine
+        - N.B. 'reset' must be called to initialise object
+            -- cannot do this from __init__()
     """
 
     BUF_SIZE = const(10)
@@ -51,7 +54,6 @@ class CommandHandler:
     C_L = const(8)
 
     R_FB = const(1)  # require ACK feedback
-    WAIT_MS = const(200)
 
     data_template = {0: 0x7E, 1: 0xFF, 2: 0x06, 4: R_FB, 9: 0xEF}
     
@@ -100,6 +102,7 @@ class CommandHandler:
         self.playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
         self.error_ev = asyncio.Event()  # not currently monitored
+        self.trigger_ev = asyncio.Event()
 
     def print_rx_message(self):
         """ for testing """
@@ -119,16 +122,14 @@ class CommandHandler:
         return (byte_sum + checksum_) & 0xffff
 
     async def send_command_str(self, cmd_str, param=0):
-        """ coro: set tx bytearray values and send
-            - commands set own timing """
+        """ coro: send command word with string command """
         await self.send_command(self.str_hex[cmd_str], param)
 
     async def send_command(self, cmd, param=0):
-        """ coro: set tx bytearray values and send
-            - commands set own timing """
+        """ coro: load tx bytearray word and send """
         self.ack_ev.clear()  # require ACK
         self.tx_word[self.CMD] = cmd
-        # slice msb and lsb
+        # slice msb and lsb for parameter and checksum
         self.tx_word[self.P_M], self.tx_word[self.P_L] = \
             hex_f.slice_reg16(param)
         self.tx_word[self.C_M], self.tx_word[self.C_L] = \
@@ -143,17 +144,16 @@ class CommandHandler:
         await self.ack_ev.wait()
 
     async def consume_rx_data(self):
-        """ coro: consume and parse received data """
+        """ coro: consume and parse received data word """
 
         def parse_rx_message(message_):
             """ parse incoming message_ parameters and
                 set dependent attributes
-                - continue following checksum error (non-zero)
-                - partial implementation for known requirements """
-
+                - on checksum error (non-zero): print but continue
+                - known requirements only; other responses ignored """
             rx_cmd = message_[self.CMD]
             if self.check_checksum(message_):
-                # continue but log
+                # print then continue
                 print(f'{rx_cmd}: error in checksum')
                 return
             # combine parameter msb and lsb
@@ -164,8 +164,7 @@ class CommandHandler:
             if rx_cmd == 0x41:  # ack
                 self.ack_ev.set()
                 return  # skip object update
-            elif rx_cmd == 0x3d:  # sd_finish
-                # self.current_track = rx_param  # uncomment if repeat used
+            elif rx_cmd == 0x3d:  # tf track finished
                 self.track_end_ev.set()
                 self.playing_ev.clear()
             elif rx_cmd == 0x3f:  # q_init
@@ -175,9 +174,9 @@ class CommandHandler:
                 self.error_ev.set()  # not currently monitored
             elif rx_cmd == 0x43:  # q_vol
                 self.volume = rx_param
-            elif rx_cmd == 0x48:  # q_sd_files
+            elif rx_cmd == 0x48:  # q_tf_files
                 self.track_count = rx_param
-            elif rx_cmd == 0x4c:  # q_sd_trk
+            elif rx_cmd == 0x4c:  # q_tf_trk
                 self.current_track = rx_param
             elif rx_cmd == 0x3a:  # media_insert
                 print('TF-card inserted.')
@@ -187,7 +186,7 @@ class CommandHandler:
             self.rx_cmd = rx_cmd
             self.rx_param = rx_param
 
-        # poll the Rx queue
+        # parse queued data
         while True:
             await self.rx_queue.is_data.wait()  # wait for data input
             self.rx_word = self.rx_queue.rmv_item()
@@ -195,10 +194,12 @@ class CommandHandler:
 
 
 async def main():
-    """ test CommandHandler and UartTxRx """
+    """ test CommandHandler and UartTxRx
+        - can be removed when testing has been completed """
 
     async def while_playing(playing, triggered):
         """ check for 'loud' Event being triggered """
+
         while playing.is_set():
             if triggered.is_set():
                 print('t...')
@@ -207,36 +208,7 @@ async def main():
                 pass
             await asyncio.sleep_ms(200)
 
-    uart = UART(0, 9600)
-    uart.init(tx=Pin(0), rx=Pin(1))
-    stream_tr = StreamTR(uart, buf_len=10)
-    c_h = CommandHandler(stream_tr)
-    adc = AdcReader(26, c_h)
-
-    # start receive and send tasks
-    asyncio.create_task(c_h.stream_tr.receiver())
-    asyncio.create_task(c_h.consume_rx_data())
-    asyncio.create_task(adc.check_trigger())
-
-    # (cmd: str, parameter: int) list for testing
-    # 'zzz' is added for sleep calls
-    commands = (('reset', 0), ('zzz', 3), ('vol_set', 30), ('zzz', 1), ('q_vol', 0),
-                ('zzz', 1), ('q_tf_files', 0), ('zzz', 1), ('track', 76), ('track', 15), ('track', 30),
-                ('zzz', 1), ('track', 78), ('zzz', 1))
-
-    for cmd in commands:
-        print(cmd)
-        command = cmd[0]
-        parameter = cmd[1]
-        if command == 'zzz':
-            await asyncio.sleep(parameter)
-        else:
-            await c_h.send_command_str(command, parameter)
-            c_h.print_rx_message()
-            # if playing, wait for track end
-            if command == 'track':
-                await while_playing(c_h.playing_ev, adc.trigger_ev)
-
+    pass
 
 if __name__ == '__main__':
     try:

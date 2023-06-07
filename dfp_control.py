@@ -17,9 +17,11 @@ class DfPlayer:
         self.track_min = 1
         self.track_max = 0
         self.track = 1
+        self.repeat_flag = False
 
     async def reset(self):
         """ coro: reset the DFPlayer
+            N.B. this coro must be run to set object attributes
             - with SD card response should be:
                 Rx word: q_init 0x3f 0x0002
                 -- signifies online storage, SD card
@@ -38,7 +40,6 @@ class DfPlayer:
 
     async def play_trk(self, track):
         """ coro: play track n """
-        print(track)
         self.track = track
         self.c_h.current_track = track
         await self.c_h.send_command_str('track', track)
@@ -58,15 +59,6 @@ class DfPlayer:
             self.track = self.track_max
         await self.play_trk(self.track)
     
-    async def repeat_trks(self, start, end):
-        """ coro: play range of tracks on repeat"""
-        trk_c = start
-        while trk_c <= end:
-            await self.play_trk(trk_c)
-            trk_c += 1
-            if trk_c > end:
-                trk_c = start
-
     async def stop(self):
         """ coro: stop playing """
         await self.c_h.send_command_str('stop', 0)
@@ -100,6 +92,29 @@ class DfPlayer:
         for track_ in sequence:
             await self.play_trk(track_)
 
+    async def repeat_tracks(self, start, end):
+        """ coro: play a range of tracks from start to end inclusive
+            then repeat
+            - run as a task so is non-blocking:
+                -- must be the final command in a set
+            - set repeat_flag True to enable (initialised False)
+            - to stop: set repeat_flag False
+            - end == start repeats a single track
+            - end can be less than the start track (count down) """
+        if end > start:
+            inc = +1
+        elif end < start:
+            inc = -1
+        else:
+            inc = 0
+        rpt_at = end + inc
+        trk = start
+        while self.repeat_flag:
+            await self.play_trk(trk)
+            trk += inc
+            if trk == rpt_at:
+                trk = start
+
 
 async def main():
     """ test DFPlayer controller """
@@ -118,8 +133,9 @@ async def main():
 
         for line in commands_:
             line = line.strip()  # trim
-            # print comment line
-            if line[0] == '#':
+            if line == '':  # skip empty line
+                continue
+            if line[0] == '#':  # print comment line then skip
                 print(line)
                 continue
             # remove commas; remove extra spaces
@@ -129,15 +145,13 @@ async def main():
 
             tokens = line.split(' ')
             cmd = tokens[0]
-            params = tokens[1:]
+            params = [int(p) for p in tokens[1:]]
             print(f'{cmd} {params}')
-            
+            # all commands block except 'rpt'
             if cmd == 'zzz':
-                param = int(params[0])
-                await asyncio.sleep(param)
+                await asyncio.sleep(params[0])
             elif cmd == 'trk':
                 # parameters required as int
-                params = [int(p) for p in params]
                 await player.track_sequence(params)
             elif cmd == 'nxt':
                 await player.next_trk()
@@ -146,11 +160,13 @@ async def main():
             elif cmd == 'rst':
                 await player.reset()
             elif cmd == 'vol':
-                param = int(params[0])
-                await player.vol_set(param)
+                await player.vol_set(params[0])
                 await player.q_vol()
             elif cmd == 'stp':
                 await player.stop()
+            elif cmd == 'rpt':
+                # to stop: set repeat_flag False
+                asyncio.create_task(player.repeat_tracks(params[0], params[1]))
 
     player = DfPlayer()
     
@@ -160,8 +176,17 @@ async def main():
     print('Send commands')
     cmd_file = 'test.txt'
     commands = get_command_lines(cmd_file)
+    # repeat_flag is initialised False
+    player.repeat_flag = True
     await run_commands(commands)
-
+    # run final 'rpt' command for 15s then stop
+    await asyncio.sleep(15)
+    player.repeat_flag = False
+    print('repeat_flag set False')
+    await asyncio.sleep(2)
+    # additional commands can now be run
+    await player.track_sequence((76, 75))
+    
 
 if __name__ == '__main__':
     try:
