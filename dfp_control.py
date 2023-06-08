@@ -14,7 +14,9 @@ class DfPlayer:
     
     def __init__(self):
         uart = UART(0, 9600)
+        # UART Tx, Rx on pins 0 and 1
         uart.init(tx=Pin(0), rx=Pin(1))
+        # ADC input on pin 26
         self.c_h = CommandHandler(StreamTR(uart, buf_len=10), AdcReader(26))
         self.track_min = 1
         self.track_max = 0
@@ -200,12 +202,12 @@ async def main():
     # repeat_flag is initialised False
     player.repeat_flag = True
     await run_commands(commands)
-    # run final 'rpt' command for 15s then stop
+    # let final 'rpt' command run for 15s then stop
     await asyncio.sleep(15)
+    print('set repeat_flag False')
     player.repeat_flag = False
-    print('repeat_flag set False')
     await asyncio.sleep(2)
-    # additional commands can now be run
+    # additional commands can now be run, including run_commands()
     await player.track_sequence((76, 75))
     
 
