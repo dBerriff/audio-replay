@@ -20,8 +20,6 @@ shuffle = 1  # 0 or 1
 play_pins = GP20, GP21  
 skip_pin = GP22
 
-diagnostics = False
-
 i2s_out = False
 
 # audio pins - can set to None if not used

@@ -19,17 +19,15 @@
 
     Note: class inheritance is not used (CP V7.3.3 bug)
 """
-
+# import:
 # hardware
 from digitalio import DigitalInOut, Direction, Pull
-from board import LED
 
 # audio
 from audiomp3 import MP3Decoder
 from audiocore import WaveFile
 from audiopwmio import PWMAudioOut as AudioOut
 from audiobusio import I2SOut
-
 
 # SD storage
 import busio
@@ -57,7 +55,7 @@ def file_ext(name_: str) -> str:
 
 
 def shuffle(tuple_: tuple) -> tuple:
-    """ return a shuffled tuple of a tuple or list
+    """ return a shuffled tuple (or list)
         - Durstenfeld / Fisher-Yates shuffle algorithm """
     n = len(tuple_)
     if n < 2:
@@ -72,7 +70,7 @@ def shuffle(tuple_: tuple) -> tuple:
 
 class SdReader:
     """ sd card reader, SPI protocol
-        - sd_dir name must be or start with '/sd' """
+        - sd_dir name must be, or start with, '/sd' """
 
     def __init__(self, clock, mosi, miso, cs, sd_dir='/sd'):
         spi = busio.SPI(clock, MOSI=mosi, MISO=miso)
@@ -91,25 +89,18 @@ class Button:
         - Pull.UP logic
         - inheritance not used: CP bug """
     
-    # class debounce values
-    n_checks = 3  # should be sufficient? Minimum 1
-    check_pause = 0.01  # approx. 0.02 / (checks - 1)
+    # debounce values
+    n_checks = 3
+    i_max = n_checks - 1  # max list index
+    check_pause = 0.01  # s - around 20ms with 2 pauses
 
-    # pull-up logic
-    inputs = [True]
-    if n_checks > 1:
-        for _ in range(1, n_checks):
-            inputs.append(True)
-        check_limit = n_checks - 1  # no pause after final reading
-    else:
-        check_limit = 0
 
     def __init__(self, pin):
-        self.pin = pin  # for diagnostics
+        self.pin = pin
         self._pin_in = DigitalInOut(pin)
         self._pin_in.switch_to_input(Pull.UP)
         self.index = -1
-        self.inputs = list(Button.inputs)
+        self.inputs = [True] * self.n_checks
     
     def __str__(self):
         """ print() string for Button """
@@ -117,13 +108,13 @@ class Button:
 
     @property
     def is_on(self) -> bool:
-        """ pull-up logic for button pressed
+        """ de-bounced check for button pressed
             - button-press sets input False """
-        # take n_readings - suggest over approx. 20ms
-        self.index += 1
-        self.index %= self.n_checks
-        self.inputs[self.index] = self._pin_in.value
-        return not any(self.inputs)  # pull-up readings must be False for On
+        for i in range(self.i_max):
+            self.inputs[i] = self._pin_in.value
+            sleep(self.check_pause)
+        self.inputs[self.i_max] = self._pin_in.value
+        return not any(self.inputs)  # all must be False for On
 
 
 class PinOut:
@@ -157,10 +148,6 @@ class AudioPlayer:
              circuitpython-audio-out  
     """
 
-    # for LED pin
-    off = False
-    on = True
-
     ext_set = {'mp3', 'wav'}
 
     def __init__(self, media_dir: str, audio_channel: AudioOut):
@@ -168,10 +155,8 @@ class AudioPlayer:
         self._audio_channel = audio_channel
         self.play_buttons = None
         self.skip_button = None
-        self.wait_led = PinOut(LED)  # board LED
         self.button_mode = False
         self.print_f_name = False
-        self.diagnostics = False
         self.files = self.get_audio_filenames()
         self._decoder = self._set_decoder()
 
@@ -212,8 +197,6 @@ class AudioPlayer:
                 if button.is_on:
                     print(button)
                     return
-                if self.diagnostics:
-                    print(button)
             sleep(Button.check_pause)
 
     def _set_decoder(self) -> MP3Decoder:
@@ -251,18 +234,15 @@ class AudioPlayer:
         """ play mp3 and wav files under button control
             - start with file [1]; [0] used for startup test """
         n_files = len(self.files)
-        list_index = 0
+        list_index = -1
         while True:
-            list_index += 1
-            list_index %= n_files
+            list_index = (list_index + 1) % n_files
             filename = self.files[list_index]
             gc.collect()  # free up memory between plays
-            self.wait_led.state = self.on
             if self.button_mode:
                 self.wait_button_press()  # play-button
             else:
                 sleep(0.2)  # avoid multiple skip-button reads
-            self.wait_led.state = self.off
             self.play_audio_file(filename)
             self.wait_audio_finish()
 
@@ -312,6 +292,8 @@ def main():
     if play_buttons:
         audio_player.play_buttons = play_buttons
         audio_player.button_mode = True
+    else:
+        audio_player.button_mode = False
     if skip_button:
         audio_player.skip_button = skip_button
 
@@ -320,7 +302,6 @@ def main():
         audio_player.shuffle_files()
     print(f'audio files:\n{audio_player.files}')
     print()
-    audio_player.button_mode = True
     audio_player.print_f_name = True
     
     # play a file at startup to check system
