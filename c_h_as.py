@@ -17,7 +17,7 @@ import hex_fns as hex_f
 
 
 class AdcReader:
-    """ read ADC input when a DF """
+    """ return ADC input as u16 property """
     def __init__(self, pin):
         self.adc = ADC(Pin(pin))
 
