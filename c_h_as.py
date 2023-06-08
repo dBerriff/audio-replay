@@ -14,26 +14,17 @@ Most DFP commands are not supported as not required or problematical.
 from machine import UART, Pin, ADC
 import uasyncio as asyncio
 import hex_fns as hex_f
-from uart_os_as import StreamTR
 
 
 class AdcReader:
-    """ read ADC input """
-    def __init__(self, pin, c_h, threshold):
+    """ read ADC input when a DF """
+    def __init__(self, pin):
         self.adc = ADC(Pin(pin))
-        self.c_h = c_h
-        self.threshold = threshold
-        self.trigger_ev = asyncio.Event()
 
-    async def check_vol_trigger(self):
-        """ read ADC input while track playing
-            set trigger if volume threshold exceeded """
-        while True:
-            await self.c_h.playing_ev.wait()
-            while self.c_h.playing_ev.is_set():
-                if self.adc.read_u16() > self.threshold:
-                    self.trigger_ev.set()
-                await asyncio.sleep_ms(20)
+    @property
+    def input(self):
+        """ ADC reading """
+        return self.adc.read_u16()
 
 
 class CommandHandler:
@@ -84,8 +75,9 @@ class CommandHandler:
     # inverse dictionary mapping
     str_hex = {value: key for key, value in hex_str.items()}
 
-    def __init__(self, stream):
+    def __init__(self, stream, adc):
         self.stream_tr = stream
+        self.adc = adc
         self.sender = stream.sender
         self.rx_queue = stream.rx_queue
         self.tx_word = bytearray(self.BUF_SIZE)
@@ -97,7 +89,8 @@ class CommandHandler:
         self.rx_param = 0x0000
         self.volume = 0  # for info
         self.track_count = 0
-        self.current_track = 0
+        self.track = 0
+        self.threshold = 28_000
         self.ack_ev = asyncio.Event()
         self.playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
@@ -136,7 +129,7 @@ class CommandHandler:
             self.get_checksum()
         # play track
         if cmd == 0x03:
-            self.current_track = param
+            self.track = param
             self.track_end_ev.clear()
             self.playing_ev.set()
         await self.sender(self.tx_word)
@@ -177,7 +170,7 @@ class CommandHandler:
             elif rx_cmd == 0x48:  # q_tf_files
                 self.track_count = rx_param
             elif rx_cmd == 0x4c:  # q_tf_trk
-                self.current_track = rx_param
+                self.track = rx_param
             elif rx_cmd == 0x3a:  # media_insert
                 print('TF-card inserted.')
             elif rx_cmd == 0x3b:  # media_remove
@@ -191,6 +184,16 @@ class CommandHandler:
             await self.rx_queue.is_data.wait()  # wait for data input
             self.rx_word = self.rx_queue.rmv_item()
             parse_rx_message(self.rx_word)
+
+    async def check_vol_trigger(self):
+        """ read ADC input while track playing
+            set trigger if volume threshold exceeded """
+        while True:
+            await self.playing_ev.wait()
+            while self.playing_ev.is_set():
+                if self.adc.input > self.threshold:
+                    self.trigger_ev.set()
+                await asyncio.sleep_ms(20)
 
 
 async def main():

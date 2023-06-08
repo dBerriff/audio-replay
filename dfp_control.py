@@ -8,16 +8,17 @@ from c_h_as import CommandHandler, AdcReader
 
 
 class DfPlayer:
+    """ implement high-level control of the DFPlayer Mini
+        - all replay is through command: 0x03 - play-track(n)
+        - other commands have proved unnecessary or problematic """
     
     def __init__(self):
         uart = UART(0, 9600)
         uart.init(tx=Pin(0), rx=Pin(1))
-        stream_tr = StreamTR(uart, buf_len=10)
-        self.c_h = CommandHandler(stream_tr)
-        self.adc = AdcReader(26, self.c_h, 28_000)
+        self.c_h = CommandHandler(StreamTR(uart, buf_len=10), AdcReader(26))
         self.track_min = 1
         self.track_max = 0
-        self.track = 1
+        self.track = 0
         self.repeat_flag = False
 
     async def reset(self):
@@ -41,8 +42,9 @@ class DfPlayer:
 
     async def play_trk(self, track):
         """ coro: play track n """
+        if track < self.track_min or track > self.track_max:
+            return
         self.track = track
-        self.c_h.current_track = track
         await self.c_h.send_command_str('track', track)
         await self.c_h.track_end_ev.wait()
 
@@ -68,7 +70,8 @@ class DfPlayer:
 
     async def vol_set(self, level):
         """ coro: set volume level 0-30 """
-        level = min(30, level)
+        if level > 30:
+            level = 30
         await self.c_h.send_command_str('vol_set', level)
         self.c_h.volume_level = level
 
@@ -86,7 +89,7 @@ class DfPlayer:
     async def q_sd_trk(self):
         """ coro: query current track number """
         await self.c_h.send_command_str('q_sd_trk')
-        print(f'Current track: {self.c_h.current_track}')
+        print(f'Current track: {self.c_h.track}')
 
     async def track_sequence(self, sequence):
         """ coro: play sequence of tracks by number """
@@ -187,9 +190,9 @@ async def main():
     # task to read and parse the response words
     asyncio.create_task(player.c_h.consume_rx_data())
     # task to monitor ADC input and set a trigger Event above a threshold
-    asyncio.create_task(player.adc.check_vol_trigger())
+    asyncio.create_task(player.c_h.check_vol_trigger())
     # test task to print a line if the ADC trigger Event has been set
-    asyncio.create_task(while_playing(player.c_h.playing_ev, player.adc.trigger_ev))
+    asyncio.create_task(while_playing(player.c_h.playing_ev, player.c_h.trigger_ev))
     
     print('Send commands')
     cmd_file = 'test.txt'
