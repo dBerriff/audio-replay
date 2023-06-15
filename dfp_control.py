@@ -144,12 +144,13 @@ async def main():
             commands_ = [line for line in fp]
         return commands_
 
-    async def run_commands(commands_):
+    async def run_commands():
         """ control DFP from simple text commands
             - format is: "cmd parameter" or "cmd, parameter"
             - work-in-progress! """
 
-        for line in commands_:
+        nonlocal commands
+        for line in commands:
             line = line.strip()  # trim
             if line == '':  # skip empty line
                 continue
@@ -201,7 +202,7 @@ async def main():
     commands = get_command_lines(cmd_file)
     # repeat_flag is initialised False
     player.repeat_flag = True
-    await run_commands(commands)
+    await run_commands()
     # let final 'rpt' command run for 15s then stop
     await asyncio.sleep(15)
     print('set repeat_flag False')
