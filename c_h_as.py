@@ -99,16 +99,16 @@ class CommandHandler:
 
     def print_rx_message(self):
         """ for testing """
-        print('Latest Rx message:', hex_f.byte_str(self.rx_cmd),
+        print('Rx message:', hex_f.byte_str(self.rx_cmd),
               hex_f.byte_str(self.rx_param), self.rx_param)
 
     def get_checksum(self):
-        """ return the 2's complement checksum of:
-            - bytes 1 to 6 """
+        """ return the 2's complement checksum of bytes 1 to 6
+            as msb, lsb """
         return hex_f.slice_reg16(-sum(self.tx_word[1:7]))
 
     def check_checksum(self, buf_):
-        """ returns 0 for consistent checksum """
+        """ returns 0 if consistent checksum """
         byte_sum = sum(buf_[1:self.C_M])
         checksum_ = buf_[self.C_M] << 8  # msb
         checksum_ += buf_[self.C_L]  # lsb
@@ -197,8 +197,7 @@ class CommandHandler:
 
 
 async def main():
-    """ test CommandHandler and UartTxRx
-        - can be removed when testing has been completed """
+    """ test code here """
     pass
 
 if __name__ == '__main__':

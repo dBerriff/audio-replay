@@ -203,13 +203,15 @@ async def main():
     # repeat_flag is initialised False
     player.repeat_flag = True
     await run_commands()
-    # let final 'rpt' command run for 15s then stop
+    # let final 'rpt' command in test.txt run for 15s then stop
     await asyncio.sleep(15)
     print('set repeat_flag False')
     player.repeat_flag = False
     await asyncio.sleep(2)
     # additional commands can now be run, including run_commands()
-    await player.track_sequence((76, 75))
+    track_seq = [76, 75]
+    print(f'trk {track_seq}')
+    await player.track_sequence(track_seq)
     
 
 if __name__ == '__main__':

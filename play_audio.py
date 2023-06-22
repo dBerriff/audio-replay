@@ -92,29 +92,31 @@ class Button:
     # debounce values
     n_checks = 3
     i_max = n_checks - 1  # max list index
-    check_pause = 0.01  # s - around 20ms with 2 pauses
-
+    check_pause = 0.02  # around 20ms for typical de-bounce
 
     def __init__(self, pin):
         self.pin = pin
         self._pin_in = DigitalInOut(pin)
         self._pin_in.switch_to_input(Pull.UP)
-        self.index = -1
-        self.inputs = [True] * self.n_checks
+        # for de-bounce readings (workspace)
+        self._inputs = [1] * self.n_checks
     
     def __str__(self):
         """ print() string for Button """
-        return f'Button pin: {self.pin}; Input: {self.inputs}'
+        return f'Button pin: {self.pin}; Input: {self._inputs}'
 
-    @property
-    def is_on(self) -> bool:
+    def get_state(self) -> bool:
         """ de-bounced check for button pressed
-            - button-press sets input False """
+            - button-press sets return to 1
+            - reverses pull-up logic
+        """
+        pin_ = self._pin_in
+        input_list = self._inputs
         for i in range(self.i_max):
-            self.inputs[i] = self._pin_in.value
+            input_list[i] = pin_.value
             sleep(self.check_pause)
-        self.inputs[self.i_max] = self._pin_in.value
-        return not any(self.inputs)  # all must be False for On
+        input_list[self.i_max] = pin_.value
+        return 1 if not any(input_list) else 0  # all readings 0 for On
 
 
 class PinOut:
@@ -183,7 +185,7 @@ class AudioPlayer:
             - skip_button pressed if exists """
         s_button = self.skip_button
         while self._audio_channel.playing:
-            if s_button and s_button.is_on:
+            if s_button and s_button.get_state() == 1:
                 self._audio_channel.stop()
                 print(s_button)
 
@@ -194,7 +196,7 @@ class AudioPlayer:
         while True:
             # blocks until a play button is pressed
             for button in self.play_buttons:                    
-                if button.is_on:
+                if button.get_state() == 1:
                     print(button)
                     return
             sleep(Button.check_pause)
