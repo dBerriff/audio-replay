@@ -7,7 +7,8 @@
     CircuitPython (CP) Essentials Audio Out: plays MP3 and WAV files
     See: https://learn.adafruit.com/circuitpython-essentials/
                  circuitpython-audio-out
-    Adapted by David Jones for Famous Trains, Derby. 2023
+    Adapted for Famous Trains, Derby 2023
+    Software: David Jones
     Hardware: David Herbert
 
     - play .mp3 and .wav files from a micro SD card or
@@ -252,7 +253,11 @@ class AudioPlayer:
 def main():
     """ play audio files on a Pi Pico
         - pins for Cytron Maker Pi Pico board """
-
+    # turn Pico LED on to confirm power-on and main.py running
+    led = DigitalInOut(settings.LED)
+    led.direction = Direction.OUTPUT
+    led.value = True
+    # the settings values are assigned within the settings module
     # assign the board pins
     if settings.play_pins:  # not None
         if type(settings.play_pins) != tuple:
@@ -309,6 +314,8 @@ def main():
     # play a file at startup to check system
     audio_player.play_audio_file(audio_player.files[0])
     audio_player.wait_audio_finish()
+    # turn Pico LED off
+    led.value = False
     
     # play all files in a repeating loop
     # with button control if settings.button_control is True

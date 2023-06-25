@@ -25,19 +25,23 @@ import hex_fns as hex_
 class Queue:
     """ simple FIFO queue """
 
-    def __init__(self, max_len):
+    def __init__(self, max_len=1):
         self.max_len = max_len
+        self.q_overflow = False
         # use deque for efficiency
         self._q = deque((), max_len)
         self._len = 0
         self.is_data = asyncio.Event()
 
     def add_item(self, item):
-        """ add item to the queue, checking queue length """
-        # _len is not checked in this version
-        self._len += 1
-        self._q.append(item)
-        self.is_data.set()
+        """ add item to the queue """
+        if self._len < self.max_len:
+            self._q.append(item)
+            self.is_data.set()
+            self._len += 1
+        else:
+            self.q_overflow = True  # not currently checked
+            print('queue overflow')
 
     def rmv_item(self):
         """ remove item from the queue if not empty """
@@ -91,20 +95,21 @@ async def main():
         while q_.q_len:
             item = q_.rmv_item()
             print(hex_.byte_array_str(item))
+            print(f'Rx queue length: {stream_tr.rx_queue.q_len}')
 
     print('Requires Pico loopback: Tx pin to Rx pin')
 
     data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
-    
+
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
     stream_tr = StreamTR(uart, buf_len=10)
     asyncio.create_task(stream_tr.receiver())
-    
+
     for i in range(10):
         data[0] = i
+        print(f'Tx {data}')
         await stream_tr.sender(data)
-        print(f'{i} Tx item')
 
     await asyncio.sleep_ms(1000)
 

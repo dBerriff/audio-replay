@@ -1,3 +1,4 @@
+
 # settings.py
 """ consolidate user and device settings """
 
@@ -7,40 +8,40 @@ from board import GP0, GP1, GP2, GP3, GP4, GP5, GP6, GP7, GP8, GP9, \
     GP20, GP21, GP22, GP23, GP24, GP25, GP26, GP27, LED
 
 # dictionary of available audio folders
-audio_source = {'SD': '/sd/', 'pico': '/audio/'}
+audio_source = {'SD': '/sd/audio/', 'pico': '/audio/'}
 
 
 # === SETTINGS
 
-folder = audio_source['SD']  # 'SD': SD-card; 'pico: flash RAM
+folder = audio_source['SD']  # "SD" or "pico"
 
 shuffle = 1  # 0 or 1
 
-# set to None if button control not required
+# set to None if not required
 play_pins = GP20, GP21  
 skip_pin = GP22
 
-i2s_out = False
+button_control = 1  # 0 or 1
 
-# audio pins - can set to None if not used
+i2s_out = 0  # 0 or 1
 
-# line-level pin out
+# audio
+
+# line-level out
 audio_pin = GP18
 
-# I2S pins out
+# I2S out
 bit_clock = GP16
 word_select = GP17  # bit_clock pin + 1
 data = GP18
 
-# SD card reader pins
+# SD card reader
 # pins for Cytron Maker Pi Pico
 clock = GP10
 mosi = GP11
 miso = GP12
 cs = GP15
-sd_dir = '/sd'  # no trailing '/'
-
-# === End of SETTINGS
+sd_dir = '/sd'  # no trailing /
 
 
 def main():
