@@ -21,49 +21,45 @@ from machine import Pin
 
 
 class Queue:
-    """ simple FIFO queue
-        - requires a re-write """
+    """ simple FIFO list as queue
+        - is_data and is_space Event.is_set() controls access
+        - events should be set within tasks, hence coros.
+    """
 
-    def __init__(self, max_len=8):
+    def __init__(self, max_len=16):
         self.max_len = max_len
+        self.q = [None] * max_len
         self.head = 0
         self.next = 0
-        self.q_empty = True
-        self.q_full = False
-        self.q = [None] * max_len
-        self._q_len = 0
         self.is_data = asyncio.Event()
         self.is_space = asyncio.Event()
         self.is_space.set()
 
-    def add_item(self, item):
-        """ add item to the queue """
+    async def add_item(self, item):
+        """ coro: add item to the queue """
         self.q[self.next] = item
         self.next = (self.next + 1) % self.max_len
         if self.next == self.head:
-            self.q_full = True
-        self.q_empty = False
+            self.is_space.clear()
         self.is_data.set()
 
-    def pop_item(self):
-        """ remove item from the queue if not empty """
-        # assumes Event is_data prevents attempted removal from empty queue
+    async def pop_item(self):
+        """ coro: remove item from the queue """
         item = self.q[self.head]
         self.head = (self.head + 1) % self.max_len
         if self.head == self.next:
-            self.q_empty = True
             self.is_data.clear()
-        self.q_full = False
         self.is_space.set()
         return item
 
     @property
     def q_len(self):
         """ number of items in the queue """
-        if self.q_empty:
-            n = 0
-        elif self.q_full:
-            n = self.max_len
+        if self.head == self.next:
+            if self.is_data.is_set():
+                n = self.max_len
+            else:
+                n = 0
         else:
             n = (self.next - self.head) % self.max_len
         return n
@@ -72,10 +68,10 @@ class Queue:
 class StreamTR:
     """ implement UART Tx and Rx as stream_tr """
 
-    def __init__(self, stream, buf_len, q_len=32):
+    def __init__(self, stream, buf_len):
         self.stream = stream
         self.buf_len = buf_len
-        self.rx_queue = Queue(q_len)
+        self.rx_queue = Queue()
         self.s_writer = asyncio.StreamWriter(self.stream, {})
         self.s_reader = asyncio.StreamReader(self.stream)
         self.in_buf = bytearray(buf_len)
@@ -90,28 +86,31 @@ class StreamTR:
         while True:
             res = await self.s_reader.readinto(self.in_buf)
             if res == self.buf_len:
-                # add received bytearray when queue has space
+                # add received bytearray to queue
                 await self.rx_queue.is_space.wait()
-                self.rx_queue.add_item(bytearray(self.in_buf))
+                # add copy of in_buf to queue, not pointer to in_buf!
+                await self.rx_queue.add_item(bytearray(self.in_buf))
 
 
 async def main():
     """ coro: test module classes """
     
-    async def data_send():
+    async def data_send(sender_):
         """ send out bytearrays of data """
         data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
         for i in range(10):
             data[0] = i
             print(f'Tx {data}')
-            await stream_tr.sender(data)
+            await sender_(data)
 
     async def q_consume(q_):
-        """ destructive! : print queue contents:  """
+        """ pop queue contents:  """
         while True:
             await q_.is_data.wait()
-            item = q_.pop_item()
-            print(f'Rx {item} q-length: {q_.q_len}')
+            item = await q_.pop_item()
+            print(f'Rx: {item} q-len: {q_.q_len}')
+            # add short delay to force q content
+            await asyncio.sleep_ms(200)
 
     print('Requires Pico loopback; connect Tx pin to Rx pin')
     print()
@@ -120,12 +119,10 @@ async def main():
     uart.init(tx=Pin(0), rx=Pin(1))
     stream_tr = StreamTR(uart, buf_len=10)
     asyncio.create_task(stream_tr.receiver())
-    asyncio.create_task(data_send())
-    await asyncio.sleep_ms(200)
     asyncio.create_task(q_consume(stream_tr.rx_queue))
-
+    asyncio.create_task(data_send(stream_tr.sender))
     await asyncio.sleep_ms(5_000)
-
+    
 
 if __name__ == '__main__':
     try:
