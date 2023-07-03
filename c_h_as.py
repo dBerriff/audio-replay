@@ -182,7 +182,7 @@ class CommandHandler:
         # parse queued data
         while True:
             await self.rx_queue.is_data.wait()  # wait for data input
-            self.rx_word = self.rx_queue.rmv_item()
+            self.rx_word = self.rx_queue.pop_item()
             parse_rx_message(self.rx_word)
 
     async def check_vol_trigger(self):

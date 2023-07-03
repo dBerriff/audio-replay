@@ -10,14 +10,13 @@
     - http://www.famoustrains.org.uk
     initial development of uasyncio.Stream UART connection:
     - uses Queue for receive stream_tr although not actually required at 9600 BAUD
-    - ! deque is not implemented in MP so develop queue using a circular list !
+    - ! deque is not implemented in MP so circular list !
     - uses 'one-shot' send for commands
     - coro is short for coroutine
 """
 
 import uasyncio as asyncio
-from machine import UART, Pin
-from collections import deque
+from machine import UART
 from machine import Pin
 
 
@@ -25,38 +24,49 @@ class Queue:
     """ simple FIFO queue
         - requires a re-write """
 
-    def __init__(self, max_len=1):
+    def __init__(self, max_len=8):
         self.max_len = max_len
-        # use deque for efficiency
-        self._q = deque((), max_len)
-        self._len = 0
+        self.head = 0
+        self.next = 0
+        self.q_empty = True
+        self.q_full = False
+        self.q = [None] * max_len
+        self._q_len = 0
         self.is_data = asyncio.Event()
         self.is_space = asyncio.Event()
         self.is_space.set()
 
     def add_item(self, item):
         """ add item to the queue """
-        if self._len < self.max_len:
-            self._q.append(item)
-            self.is_data.set()
-            self._len += 1
-        if self._len == self.max_len:
-            self.is_space.clear()
+        self.q[self.next] = item
+        self.next = (self.next + 1) % self.max_len
+        if self.next == self.head:
+            self.q_full = True
+        self.q_empty = False
+        self.is_data.set()
 
-    def rmv_item(self):
+    def pop_item(self):
         """ remove item from the queue if not empty """
         # assumes Event is_data prevents attempted removal from empty queue
-        self._len -= 1
-        item = self._q.popleft()
-        self.is_space.set()
-        if self._len == 0:
+        item = self.q[self.head]
+        self.head = (self.head + 1) % self.max_len
+        if self.head == self.next:
+            self.q_empty = True
             self.is_data.clear()
+        self.q_full = False
+        self.is_space.set()
         return item
 
     @property
     def q_len(self):
         """ number of items in the queue """
-        return self._len
+        if self.q_empty:
+            n = 0
+        elif self.q_full:
+            n = self.max_len
+        else:
+            n = (self.next - self.head) % self.max_len
+        return n
 
 
 class StreamTR:
@@ -100,7 +110,7 @@ async def main():
         """ destructive! : print queue contents:  """
         while True:
             await q_.is_data.wait()
-            item = q_.rmv_item()
+            item = q_.pop_item()
             print(f'Rx {item} q-length: {q_.q_len}')
 
     print('Requires Pico loopback; connect Tx pin to Rx pin')

@@ -32,7 +32,7 @@ class UartTR:
         """ coro: send out data item """
         while True:
             if self.tx_queue.is_data.is_set():
-                item = self.tx_queue.rmv_item()
+                item = self.tx_queue.pop_item()
                 self.s_writer.write(item)
                 await self.s_writer.drain()
             await asyncio.sleep_ms(20)
@@ -55,7 +55,7 @@ async def main():
         """ destructive! : print queue contents:  """
         print(f'{name}queue contents:')
         while q_.q_len:
-            item = q_.rmv_item()
+            item = q_.pop_item()
             print(hex_.byte_array_str(item))
 
     data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
