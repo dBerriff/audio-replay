@@ -10,7 +10,7 @@
     - http://www.famoustrains.org.uk
     initial development of uasyncio.Stream UART connection:
     - uses Queue for receive stream_tr although not actually required at 9600 BAUD
-    - Queue uses collections.deque for efficiency
+    - ! deque is not implemented in MP so develop queue using a circular list !
     - uses 'one-shot' send for commands
     - coro is short for coroutine
 """
@@ -19,19 +19,20 @@ import uasyncio as asyncio
 from machine import UART, Pin
 from collections import deque
 from machine import Pin
-import hex_fns as hex_
 
 
 class Queue:
-    """ simple FIFO queue """
+    """ simple FIFO queue
+        - requires a re-write """
 
     def __init__(self, max_len=1):
         self.max_len = max_len
-        self.q_overflow = False
         # use deque for efficiency
         self._q = deque((), max_len)
         self._len = 0
         self.is_data = asyncio.Event()
+        self.is_space = asyncio.Event()
+        self.is_space.set()
 
     def add_item(self, item):
         """ add item to the queue """
@@ -39,15 +40,15 @@ class Queue:
             self._q.append(item)
             self.is_data.set()
             self._len += 1
-        else:
-            self.q_overflow = True  # not currently checked
-            print('queue overflow')
+        if self._len == self.max_len:
+            self.is_space.clear()
 
     def rmv_item(self):
         """ remove item from the queue if not empty """
         # assumes Event is_data prevents attempted removal from empty queue
         self._len -= 1
         item = self._q.popleft()
+        self.is_space.set()
         if self._len == 0:
             self.is_data.clear()
         return item
@@ -61,14 +62,13 @@ class Queue:
 class StreamTR:
     """ implement UART Tx and Rx as stream_tr """
 
-    def __init__(self, stream, buf_len):
+    def __init__(self, stream, buf_len, q_len=32):
         self.stream = stream
         self.buf_len = buf_len
-        self.rx_queue = Queue(20)
+        self.rx_queue = Queue(q_len)
         self.s_writer = asyncio.StreamWriter(self.stream, {})
         self.s_reader = asyncio.StreamReader(self.stream)
         self.in_buf = bytearray(buf_len)
-        self.data_ev = asyncio.Event()
 
     async def sender(self, data):
         """ coro: send out data item """
@@ -80,41 +80,41 @@ class StreamTR:
         while True:
             res = await self.s_reader.readinto(self.in_buf)
             if res == self.buf_len:
-                # add copied bytearray
+                # add received bytearray when queue has space
+                await self.rx_queue.is_space.wait()
                 self.rx_queue.add_item(bytearray(self.in_buf))
-                self.data_ev.set()
-            await asyncio.sleep_ms(20)
 
 
 async def main():
     """ coro: test module classes """
+    
+    async def data_send():
+        """ send out bytearrays of data """
+        data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
+        for i in range(10):
+            data[0] = i
+            print(f'Tx {data}')
+            await stream_tr.sender(data)
 
-    def q_dump(q_, name=''):
+    async def q_consume(q_):
         """ destructive! : print queue contents:  """
-        print(f'{name}queue contents:')
-        while q_.q_len:
+        while True:
+            await q_.is_data.wait()
             item = q_.rmv_item()
-            print(hex_.byte_array_str(item))
-            print(f'Rx queue length: {stream_tr.rx_queue.q_len}')
+            print(f'Rx {item} q-length: {q_.q_len}')
 
-    print('Requires Pico loopback: Tx pin to Rx pin')
-
-    data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
+    print('Requires Pico loopback; connect Tx pin to Rx pin')
+    print()
 
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
     stream_tr = StreamTR(uart, buf_len=10)
     asyncio.create_task(stream_tr.receiver())
+    asyncio.create_task(data_send())
+    await asyncio.sleep_ms(200)
+    asyncio.create_task(q_consume(stream_tr.rx_queue))
 
-    for i in range(10):
-        data[0] = i
-        print(f'Tx {data}')
-        await stream_tr.sender(data)
-
-    await asyncio.sleep_ms(1000)
-
-    # demonstrate that items have been added to the queue
-    q_dump(stream_tr.rx_queue, name='Receive ')
+    await asyncio.sleep_ms(5_000)
 
 
 if __name__ == '__main__':
