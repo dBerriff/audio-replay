@@ -35,7 +35,7 @@ class Queue:
         self.is_space = asyncio.Event()
         self.is_space.set()
 
-    async def add_item(self, item):
+    def add_item(self, item):
         """ coro: add item to the queue """
         self.q[self.next] = item
         self.next = (self.next + 1) % self.max_len
@@ -43,7 +43,7 @@ class Queue:
             self.is_space.clear()
         self.is_data.set()
 
-    async def pop_item(self):
+    def pop_item(self):
         """ coro: remove item from the queue """
         item = self.q[self.head]
         self.head = (self.head + 1) % self.max_len
@@ -68,10 +68,10 @@ class Queue:
 class StreamTR:
     """ implement UART Tx and Rx as stream_tr """
 
-    def __init__(self, stream, buf_len):
+    def __init__(self, stream, buf_len, rx_queue):
         self.stream = stream
         self.buf_len = buf_len
-        self.rx_queue = Queue()
+        self.rx_queue = rx_queue
         self.s_writer = asyncio.StreamWriter(self.stream, {})
         self.s_reader = asyncio.StreamReader(self.stream)
         self.in_buf = bytearray(buf_len)
@@ -89,11 +89,13 @@ class StreamTR:
                 # add received bytearray to queue
                 await self.rx_queue.is_space.wait()
                 # add copy of in_buf to queue, not pointer to in_buf!
-                await self.rx_queue.add_item(bytearray(self.in_buf))
+                self.rx_queue.add_item(bytearray(self.in_buf))
 
 
 async def main():
     """ coro: test module classes """
+    
+    # loopback test of send and receive
     
     async def data_send(sender_):
         """ send out bytearrays of data """
@@ -107,9 +109,9 @@ async def main():
         """ pop queue contents:  """
         while True:
             await q_.is_data.wait()
-            item = await q_.pop_item()
+            item = q_.pop_item()
             print(f'Rx: {item} q-len: {q_.q_len}')
-            # add short delay to force q content
+            # add short delay to test q content
             await asyncio.sleep_ms(200)
 
     print('Requires Pico loopback; connect Tx pin to Rx pin')
@@ -117,9 +119,10 @@ async def main():
 
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
-    stream_tr = StreamTR(uart, buf_len=10)
+    queue = Queue()
+    stream_tr = StreamTR(uart, buf_len=10, rx_queue=queue)
     asyncio.create_task(stream_tr.receiver())
-    asyncio.create_task(q_consume(stream_tr.rx_queue))
+    asyncio.create_task(q_consume(queue))
     asyncio.create_task(data_send(stream_tr.sender))
     await asyncio.sleep_ms(5_000)
     
