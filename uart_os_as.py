@@ -13,6 +13,7 @@
     - ! deque is not implemented in MP so circular list !
     - uses 'one-shot' send for commands
     - coro is short for coroutine
+    - bytearray length is 10
 """
 
 import uasyncio as asyncio
@@ -23,19 +24,19 @@ from machine import Pin
 class Queue:
     """ simple FIFO list as queue
         - is_data and is_space Event.is_set() controls access
-        - events should be set within tasks, hence coros.
+        - events should be set within tasks, hence coros for add and pop.
     """
 
-    def __init__(self, max_len=16):
+    def __init__(self, b_array_len, max_len=16):
         self.max_len = max_len
-        self.q = [None] * max_len
+        self.q = [bytearray(b_array_len)] * max_len
         self.head = 0
         self.next = 0
         self.is_data = asyncio.Event()
         self.is_space = asyncio.Event()
         self.is_space.set()
 
-    def add_item(self, item):
+    async def add_item(self, item):
         """ coro: add item to the queue """
         self.q[self.next] = item
         self.next = (self.next + 1) % self.max_len
@@ -43,7 +44,7 @@ class Queue:
             self.is_space.clear()
         self.is_data.set()
 
-    def pop_item(self):
+    async def pop_item(self):
         """ coro: remove item from the queue """
         item = self.q[self.head]
         self.head = (self.head + 1) % self.max_len
@@ -63,6 +64,15 @@ class Queue:
         else:
             n = (self.next - self.head) % self.max_len
         return n
+
+    def q_print(self):
+        """ print out all queue-item values """
+        print(f'head: {self.head}; next: {self.next}')
+        q_str = '['
+        for i in range(self.max_len):
+            q_str += f'{self.q[i]}, '
+        q_str = q_str[:-2] + ']'
+        print(q_str)
 
 
 class StreamTR:
@@ -88,19 +98,20 @@ class StreamTR:
             if res == self.buf_len:
                 # add received bytearray to queue
                 await self.rx_queue.is_space.wait()
-                # add copy of in_buf to queue, not pointer to in_buf!
-                self.rx_queue.add_item(bytearray(self.in_buf))
+                await self.rx_queue.add_item(bytearray(self.in_buf))
 
 
 async def main():
     """ coro: test module classes """
+    
+    byte_array_len = 10
     
     # loopback test of send and receive
     
     async def data_send(sender_):
         """ send out bytearrays of data """
         data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
-        for i in range(10):
+        for i in range(byte_array_len):
             data[0] = i
             print(f'Tx {data}')
             await sender_(data)
@@ -109,22 +120,22 @@ async def main():
         """ pop queue contents:  """
         while True:
             await q_.is_data.wait()
-            item = q_.pop_item()
-            print(f'Rx: {item} q-len: {q_.q_len}')
-            # add short delay to test q content
-            await asyncio.sleep_ms(200)
+            item = await q_.pop_item()
+            print(f'== Rx: {item} q-len: {q_.q_len}')
+            # test: delay to allow q content to build
+            await asyncio.sleep_ms(10)
 
     print('Requires Pico loopback; connect Tx pin to Rx pin')
     print()
 
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
-    queue = Queue()
-    stream_tr = StreamTR(uart, buf_len=10, rx_queue=queue)
+    queue = Queue(byte_array_len)
+    stream_tr = StreamTR(uart, buf_len=byte_array_len, rx_queue=queue)
     asyncio.create_task(stream_tr.receiver())
     asyncio.create_task(q_consume(queue))
     asyncio.create_task(data_send(stream_tr.sender))
-    await asyncio.sleep_ms(5_000)
+    await asyncio.sleep_ms(1_000)
     
 
 if __name__ == '__main__':
