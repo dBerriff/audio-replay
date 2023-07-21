@@ -29,7 +29,7 @@ class Queue:
 
     def __init__(self, b_array_len, max_len=16):
         self.max_len = max_len
-        self.q = [bytearray(b_array_len)] * max_len
+        self.queue = [bytearray(b_array_len)] * max_len
         self.head = 0
         self.next = 0
         self.is_data = asyncio.Event()
@@ -38,7 +38,7 @@ class Queue:
 
     async def add_item(self, item):
         """ coro: add item to the queue """
-        self.q[self.next] = item
+        self.queue[self.next] = item
         self.next = (self.next + 1) % self.max_len
         if self.next == self.head:
             self.is_space.clear()
@@ -46,7 +46,7 @@ class Queue:
 
     async def pop_item(self):
         """ coro: remove item from the queue """
-        item = self.q[self.head]
+        item = self.queue[self.head]
         self.head = (self.head + 1) % self.max_len
         if self.head == self.next:
             self.is_data.clear()
@@ -70,7 +70,7 @@ class Queue:
         print(f'head: {self.head}; next: {self.next}')
         q_str = '['
         for i in range(self.max_len):
-            q_str += f'{self.q[i]}, '
+            q_str += f'{self.queue[i]}, '
         q_str = q_str[:-2] + ']'
         print(q_str)
 

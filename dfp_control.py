@@ -5,6 +5,19 @@ import uasyncio as asyncio
 from machine import Pin, UART
 from uart_os_as import StreamTR
 from c_h_as import CommandHandler, AdcReader
+from random import randint
+
+def shuffle(tracks: list) -> tuple:
+    """ return a shuffled tuple (or list)
+        - Durstenfeld / Fisher-Yates shuffle algorithm """
+    n = len(tracks)
+    if n < 2:
+        return tracks
+    limit = n - 1
+    for i in range(limit):  # exclusive range
+        j = randint(i, limit)  # inclusive range
+        tracks[i], tracks[j] = tracks[j], tracks[i]
+    return tuple(tracks)
 
 
 class DfPlayer:
@@ -95,8 +108,9 @@ class DfPlayer:
 
     async def track_sequence(self, sequence):
         """ coro: play sequence of tracks by number """
-        for track_ in sequence:
-            await self.play_trk(track_)
+        while self.repeat_flag:
+            for track_ in sequence:
+                await self.play_trk(track_)
 
     async def repeat_tracks(self, start, end):
         """ coro: play a range of tracks from start to end inclusive
@@ -112,14 +126,22 @@ class DfPlayer:
         elif end < start:
             inc = -1
         else:
-            inc = 0
-        rpt_at = end + inc
-        trk = start
+            return
+        rewind = end + inc
+        trk_counter = start
         while self.repeat_flag:
-            await self.play_trk(trk)
-            trk += inc
-            if trk == rpt_at:
-                trk = start
+            await self.play_trk(trk_counter)
+            trk_counter += inc
+            if trk_counter == rewind:
+                trk_counter = start
+
+    def play_all(self, do_shuffle=True):
+        """ play all tracks on repeat, optionally shuffled """
+        sequence = list(range(self.track_min, self.max + 1))
+        if do_shuffle:
+            sequence = shuffle(sequence)
+        self.repeat_flag = True
+        self.track_sequence(sequence)
 
 
 async def main():
