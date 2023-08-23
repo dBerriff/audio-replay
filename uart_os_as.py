@@ -12,7 +12,6 @@
     - uses Queue for receive stream_tr although not actually required at 9600 BAUD
     - ! deque is not implemented in MP so circular list !
     - uses 'one-shot' send for commands
-    - coro is short for coroutine
     - bytearray length is 10
 """
 
@@ -36,7 +35,7 @@ class Queue:
         self.is_space = asyncio.Event()
         self.is_space.set()
 
-    async def add_item(self, item):
+    async def put(self, item):
         """ coro: add item to the queue """
         self.queue[self.next] = item
         self.next = (self.next + 1) % self.max_len
@@ -44,7 +43,7 @@ class Queue:
             self.is_space.clear()
         self.is_data.set()
 
-    async def pop_item(self):
+    async def get(self):
         """ coro: remove item from the queue """
         item = self.queue[self.head]
         self.head = (self.head + 1) % self.max_len
@@ -80,7 +79,7 @@ class StreamTR:
 
     def __init__(self, stream, buf_len, rx_queue):
         self.stream = stream
-        self.buf_len = buf_len
+        self.buf_len = buf_len  # length of bytearray
         self.rx_queue = rx_queue
         self.s_writer = asyncio.StreamWriter(self.stream, {})
         self.s_reader = asyncio.StreamReader(self.stream)
@@ -98,7 +97,7 @@ class StreamTR:
             if res == self.buf_len:
                 # add received bytearray to queue
                 await self.rx_queue.is_space.wait()
-                await self.rx_queue.add_item(bytearray(self.in_buf))
+                await self.rx_queue.put(bytearray(self.in_buf))
 
 
 async def main():
@@ -120,7 +119,7 @@ async def main():
         """ pop queue contents:  """
         while True:
             await q_.is_data.wait()
-            item = await q_.pop_item()
+            item = await q_.get()
             print(f'== Rx: {item} q-len: {q_.q_len}')
             # test: delay to allow q content to build
             await asyncio.sleep_ms(10)
@@ -130,11 +129,12 @@ async def main():
 
     uart = UART(0, 9600)
     uart.init(tx=Pin(0), rx=Pin(1))
-    queue = Queue(byte_array_len)
-    stream_tr = StreamTR(uart, buf_len=byte_array_len, rx_queue=queue)
+    queue = Queue(32)
+    stream_tr = StreamTR(uart, byte_array_len, queue)
     asyncio.create_task(stream_tr.receiver())
-    asyncio.create_task(q_consume(queue))
     asyncio.create_task(data_send(stream_tr.sender))
+    await asyncio.sleep_ms(200)
+    asyncio.create_task(q_consume(queue))
     await asyncio.sleep_ms(1_000)
     
 

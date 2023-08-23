@@ -1,6 +1,4 @@
-
-# settings.py
-""" consolidate user and device settings """
+""" for play_audio.py: consolidate user and device settings """
 
 # import all Pico pin objects to simplify user settings
 from board import GP0, GP1, GP2, GP3, GP4, GP5, GP6, GP7, GP8, GP9, \
@@ -23,17 +21,10 @@ skip_pin = GP22
 
 button_control = 1  # 0 or 1
 
-i2s_out = 0  # 0 or 1
-
 # audio
 
 # line-level out
 audio_pin = GP18
-
-# I2S out
-bit_clock = GP16
-word_select = GP17  # bit_clock pin + 1
-data = GP18
 
 # SD card reader
 # pins for Cytron Maker Pi Pico
@@ -42,12 +33,3 @@ mosi = GP11
 miso = GP12
 cs = GP15
 sd_dir = '/sd'  # no trailing /
-
-
-def main():
-    """"""
-    print('settings file for play_audio.py')
-
-
-if __name__ == '__main__':
-    main()

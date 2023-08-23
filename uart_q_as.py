@@ -32,7 +32,7 @@ class UartTR:
         """ coro: send out data item """
         while True:
             if self.tx_queue.is_data.is_set():
-                item = self.tx_queue.pop_item()
+                item = self.tx_queue.get()
                 self.s_writer.write(item)
                 await self.s_writer.drain()
             await asyncio.sleep_ms(20)
@@ -43,7 +43,7 @@ class UartTR:
             res = await self.s_reader.readinto(self.in_buf)
             if res == self.buf_len:
                 # add copied bytearray
-                self.rx_queue.add_item(bytearray(self.in_buf))
+                self.rx_queue.put(bytearray(self.in_buf))
                 self.data_ev.set()
             await asyncio.sleep_ms(20)
 
@@ -55,7 +55,7 @@ async def main():
         """ destructive! : print queue contents:  """
         print(f'{name}queue contents:')
         while q_.q_len:
-            item = q_.pop_item()
+            item = q_.get()
             print(hex_.byte_array_str(item))
 
     data = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
@@ -66,7 +66,7 @@ async def main():
     for i in range(10):
         print(f'{i} Add item to queue')
         data[0] = i
-        uart_tr.tx_queue.add_item(bytearray(data))
+        uart_tr.tx_queue.put(bytearray(data))
 
     task0 = asyncio.create_task(uart_tr.receiver())
     task1 = asyncio.create_task(uart_tr.sender())

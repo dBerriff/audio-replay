@@ -1,7 +1,7 @@
 # c_h_as.py
 """
 Control a DFPlayer Mini (DFP) from a Raspberry Pi Pico.
-Requires modules hex_fns and uart_os_as to be loaded onto the Pico.
+hex_fns must be loaded onto the Pico.
 See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP documentation
 Most DFP commands are not supported as not required or problematical.
 
@@ -182,7 +182,7 @@ class CommandHandler:
         # parse queued data
         while True:
             await self.rx_queue.is_data.wait()  # wait for data input
-            self.rx_word = self.rx_queue.pop_item()
+            self.rx_word = await self.rx_queue.get()
             parse_rx_message(self.rx_word)
 
     async def check_vol_trigger(self):

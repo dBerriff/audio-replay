@@ -10,11 +10,15 @@
     Adapted for Famous Trains, Derby 2023
     Software: David Jones
     Hardware: David Herbert
+
     - play .mp3 and .wav files from a micro SD card or
       CP storage
+
     - User and hardware settings are taken from settings.py
+    
     - Simple multiple button reads to reject single noise spikes 
-    - class inheritance is not used (CP V7.3.3 bug)
+
+    Note: class inheritance is not used (CP V7.3.3 bug)
 """
 # import:
 # hardware
@@ -24,6 +28,7 @@ from digitalio import DigitalInOut, Direction, Pull
 from audiomp3 import MP3Decoder
 from audiocore import WaveFile
 from audiopwmio import PWMAudioOut as AudioOut
+from audiobusio import I2SOut
 
 # SD storage
 import busio
@@ -50,17 +55,18 @@ def file_ext(name_: str) -> str:
     return ext_
 
 
-def shuffle(list_):
-    """ return a shuffled list
+def shuffle(tuple_: tuple) -> tuple:
+    """ return a shuffled tuple (or list)
         - Durstenfeld / Fisher-Yates shuffle algorithm """
-    limit = len(list_) - 1
-    if limit < 1:
-        return list_
-    s_list = list_
+    n = len(tuple_)
+    if n < 2:
+        return tuple_
+    s_list = list(tuple_)
+    limit = n - 1
     for i in range(limit):  # exclusive range
         j = randint(i, limit)  # inclusive range
         s_list[i], s_list[j] = s_list[j], s_list[i]
-    return s_list
+    return tuple(s_list)
 
 
 class SdReader:
@@ -81,12 +87,13 @@ class SdReader:
 
 class Button:
     """ input button
-        - Pull.UP logic """
+        - Pull.UP logic
+        - inheritance not used: CP bug """
     
     # debounce values
     n_checks = 3
     i_max = n_checks - 1  # max list index
-    check_pause = 0.02 / i_max  # 20ms for typical de-bounce
+    check_pause = 0.02  # around 20ms for typical de-bounce
 
     def __init__(self, pin):
         self.pin = pin
@@ -99,15 +106,18 @@ class Button:
         """ print() string for Button """
         return f'Button pin: {self.pin}; Input: {self._inputs}'
 
-    def get_state(self):
-        """ de-bounced check for button pressed """
+    def get_state(self) -> bool:
+        """ de-bounced check for button pressed
+            - button-press sets return to 1
+            - reverses pull-up logic
+        """
         pin_ = self._pin_in
         input_list = self._inputs
         for i in range(self.i_max):
             input_list[i] = pin_.value
             sleep(self.check_pause)
         input_list[self.i_max] = pin_.value
-        return 1 if not any(input_list) else 0
+        return 1 if not any(input_list) else 0  # all readings 0 for On
 
 
 class PinOut:
@@ -153,7 +163,7 @@ class AudioPlayer:
         self.files = self.get_audio_filenames()
         self._decoder = self._set_decoder()
 
-    def get_audio_filenames(self):
+    def get_audio_filenames(self) -> tuple:
         """ from folder, return a list of type in ext_list
             - CircuitPython libraries replay .mp3 or .wav files
             - skip system files with first char == '.' """
@@ -163,8 +173,8 @@ class AudioPlayer:
             print(f'Error in reading directory: {self.media_dir}')
             sys.exit()
         # return audio filenames skipping system files starting with '.'
-        return [f for f in file_list
-                if not f.startswith('.') and file_ext(f) in self.ext_set]
+        return tuple((f for f in file_list
+                      if f[0] != '.' and file_ext(f) in self.ext_set))
 
     def shuffle_files(self):
         """ shuffle the file list """
@@ -178,6 +188,7 @@ class AudioPlayer:
         while self._audio_channel.playing:
             if s_button and s_button.get_state() == 1:
                 self._audio_channel.stop()
+                print(s_button)
 
     def wait_button_press(self):
         """ wait for a button to be pressed
@@ -187,16 +198,20 @@ class AudioPlayer:
             # blocks until a play button is pressed
             for button in self.play_buttons:                    
                 if button.get_state() == 1:
+                    print(button)
                     return
             sleep(Button.check_pause)
 
     def _set_decoder(self) -> MP3Decoder:
         """ return decoder if .mp3 file found
             else set to None """
+        decoder = None
         for filename in self.files:
             if file_ext(filename) == 'mp3':
                 # decoder instantiation requires a file
-                return MP3Decoder(open(self.media_dir + filename, 'rb'))
+                decoder = MP3Decoder(open(self.media_dir + filename, 'rb'))
+                break  # instantiate once only
+        return decoder
 
     def play_audio_file(self, filename: str):
         """ play single audio file """
@@ -219,7 +234,8 @@ class AudioPlayer:
         self._audio_channel.play(stream)
 
     def play_all_files(self):
-        """ play all audio files """
+        """ play mp3 and wav files under button control
+            - start with file [1]; [0] used for startup test """
         n_files = len(self.files)
         list_index = -1
         while True:
@@ -244,7 +260,11 @@ def main():
     # the settings values are assigned within the settings module
     # assign the board pins
     if settings.play_pins:  # not None
-        play_buttons = list(Button(pin) for pin in settings.play_pins)
+        if type(settings.play_pins) != tuple:
+            # convert single value to tuple
+            play_buttons = Button(settings.play_pins),
+        else:
+            play_buttons = tuple(Button(pin) for pin in settings.play_pins)
     else:
         play_buttons = None
         
@@ -252,6 +272,11 @@ def main():
         skip_button = Button(settings.skip_pin)
     else:
         skip_button = None
+        
+    print('Buttons:')
+    for button in play_buttons:
+        print(button)
+    print(skip_button)
 
     audio_folder = settings.folder
     # mount SD-card if required
@@ -265,7 +290,10 @@ def main():
     print()
 
     # audio output
-    o_stream = AudioOut(settings.audio_pin)
+    if settings.i2s_out:
+        o_stream = I2SOut(settings.bit_clock, settings.word_select, settings.data)
+    else:
+        o_stream = AudioOut(settings.audio_pin)
 
     audio_player = AudioPlayer(audio_folder, o_stream)
     if play_buttons:
@@ -286,8 +314,11 @@ def main():
     # play a file at startup to check system
     audio_player.play_audio_file(audio_player.files[0])
     audio_player.wait_audio_finish()
+    # turn Pico LED off
     led.value = False
     
+    # play all files in a repeating loop
+    # with button control if settings.button_control is True
     audio_player.play_all_files()
 
 
