@@ -64,8 +64,6 @@ async def main():
     # task to read and parse the response words
     asyncio.create_task(command_handler.consume_rx_data())
 
-
-    
     print('Run commands')
     commands = get_command_lines('test.txt')
     # repeat_flag is initialised False
