@@ -1,17 +1,15 @@
-# c_h_as.py
+# dfp_app_as.py
 """
-Control a DFPlayer Mini (DFP) from a Raspberry Pi Pico.
-hex_fns must be loaded onto the Pico.
+DFPlayer Mini (DFP): application
 See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP documentation
-Most DFP commands are not supported as not required or problematical.
-
+Many DFP commands are not supported or buggy - use Python code instead.
 - TF-card is synonymous with microSD Card
 - this version is for TF-cards only
 - simplified: no folder-related commands
 
 """
 
-from machine import UART, Pin, ADC
+from machine import Pin, ADC
 import uasyncio as asyncio
 import hex_fns as hex_f
 
@@ -29,14 +27,10 @@ class AdcReader:
 
 class CommandHandler:
     """ formats, sends and receives command and query messages
-        - see Flyron Technology Co documentation for references
-        - www.flyrontech.com
-        - coro is short for coroutine
         - N.B. 'reset' must be called to initialise object
-            -- cannot do this from __init__()
     """
 
-    BUF_SIZE = const(10)
+    BUF_SIZE = const(10)  # bytearray
     # data-byte indices
     CMD = const(3)
     P_M = const(5)  # parameter
@@ -45,11 +39,10 @@ class CommandHandler:
     C_L = const(8)
 
     R_FB = const(1)  # require ACK feedback
-
+    # fixed bytearray elements by index
     data_template = {0: 0x7E, 1: 0xFF, 2: 0x06, 4: R_FB, 9: 0xEF}
     
-    # repeat and sleep commands removed as problematic
-    # use software to emulate
+    # selective command dictionary
     hex_str = {
         # commands
         0x03: 'track',  # 1-3000
@@ -87,10 +80,10 @@ class CommandHandler:
             self.tx_word[key] = self.data_template[key]
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
-        self.volume = 0  # for info
+        self.volume = 0  # returned from dfp
         self.track_count = 0
         self.track = 0
-        self.threshold = 28_000
+        self.threshold = 28_000  # empirical for event triggering
         self.ack_ev = asyncio.Event()
         self.playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
@@ -103,8 +96,7 @@ class CommandHandler:
               hex_f.byte_str(self.rx_param), self.rx_param)
 
     def get_checksum(self):
-        """ return the 2's complement checksum of bytes 1 to 6
-            as msb, lsb """
+        # 2's complement checksum of bytes 1 to 6
         return hex_f.slice_reg16(-sum(self.tx_word[1:7]))
 
     def check_checksum(self, buf_):
@@ -141,15 +133,11 @@ class CommandHandler:
 
         def parse_rx_message(message_):
             """ parse incoming message_ parameters and
-                set dependent attributes
-                - on checksum error (non-zero): print but continue
-                - known requirements only; other responses ignored """
+                set any dependent attributes """
             rx_cmd = message_[self.CMD]
             if self.check_checksum(message_):
-                # print then continue
                 print(f'{rx_cmd}: error in checksum')
                 return
-            # combine parameter msb and lsb
             rx_param = hex_f.m_l_reg16(
                 message_[self.P_M], message_[self.P_L])
 
@@ -186,8 +174,8 @@ class CommandHandler:
             parse_rx_message(self.rx_word)
 
     async def check_vol_trigger(self):
-        """ read ADC input while track playing
-            set trigger if volume threshold exceeded """
+        """ read ADC input at intervals while track playing
+            - set trigger if volume threshold exceeded """
         while True:
             await self.playing_ev.wait()
             while self.playing_ev.is_set():
@@ -197,7 +185,7 @@ class CommandHandler:
 
 
 async def main():
-    """ test code here """
+    """"""
     pass
 
 if __name__ == '__main__':

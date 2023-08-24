@@ -3,8 +3,8 @@
 
 import uasyncio as asyncio
 from machine import Pin, UART
-from uart_os_as import StreamTR, Queue
-from c_h_as import CommandHandler, AdcReader
+from uart_ba_as import StreamTR, Queue
+from dfp_app_as import CommandHandler, AdcReader
 from random import randint
 
 
@@ -24,7 +24,8 @@ def shuffle(tracks: list) -> tuple:
 class DfPlayer:
     """ implement high-level control of the DFPlayer Mini
         - all replay is through command: 0x03 - play-track(n)
-        - other commands have proved unnecessary or problematic """
+        - other commands have proved unnecessary or problematic
+        - tracks are referenced by number counting from 1 """
     
     byte_array_len = 10  # correct for DfPlayer Mini
     
@@ -119,15 +120,15 @@ class DfPlayer:
     async def repeat_tracks(self, start, end):
         """ coro: play a range of tracks from start to end inclusive
             then repeat
-            - run as a task so is non-blocking:
-                -- should be the final command in a set
-            - to enable: set repeat_flag True
+            - run as a task: non-blocking so repeat_flag can be set
+            - should be the final command in a script list
+            - to enable: must set repeat_flag True
             - to stop: set repeat_flag False
-            - end can be less than the start track (count down) """
+        """
         if end > start:
             inc = +1
         elif end < start:
-            inc = -1
+            inc = -1  # count down through tracks
         else:
             return
         rewind = end + inc
@@ -135,7 +136,7 @@ class DfPlayer:
         while self.repeat_flag:
             await self.play_trk(trk_counter)
             trk_counter += inc
-            if trk_counter == rewind:
+            if trk_counter == rewind:  # end of list
                 trk_counter = start
 
     def play_all(self, do_shuffle=True):
@@ -148,96 +149,8 @@ class DfPlayer:
 
 
 async def main():
-    """ test DFPlayer controller """
-    
-    async def while_playing(playing, trigger):
-        """ check for 'loud' Event being triggered
-            - test function to demonstrate operation """
-        while True:
-            await playing.wait()
-            while playing.is_set():
-                if trigger.is_set():
-                    print('loud!')
-                    # clear to catch next loud event
-                    trigger.clear()
-                await asyncio.sleep_ms(200)
-
-    def get_command_lines(filename):
-        """ read in command-lines from a text file
-            - work-in-progress! """
-        with open(filename) as fp:
-            commands_ = [line for line in fp]
-        return commands_
-
-    async def run_commands(commands_):
-        """ control DFP from simple text commands
-            - format is: "cmd parameter" or "cmd, parameter"
-            - work-in-progress! """
-
-        for line in commands_:
-            line = line.strip()  # trim
-            if line == '':  # skip empty line
-                continue
-            if line[0] == '#':  # print comment line then skip
-                print(line)
-                continue
-            # remove commas; remove extra spaces
-            line = line.replace(',', ' ')
-            while '  ' in line:
-                line = line.replace('  ', ' ')
-
-            tokens = line.split(' ')
-            cmd = tokens[0]
-            params = [int(p) for p in tokens[1:]]
-            print(f'{cmd} {params}')
-            # all commands block except 'rpt'
-            if cmd == 'zzz':
-                await asyncio.sleep(params[0])
-            elif cmd == 'trk':
-                # parameters required as int
-                await player.track_sequence(params)
-            elif cmd == 'nxt':
-                await player.next_trk()
-            elif cmd == 'prv':
-                await player.prev_trk()
-            elif cmd == 'rst':
-                await player.reset()
-            elif cmd == 'vol':
-                await player.vol_set(params[0])
-                await player.q_vol()
-            elif cmd == 'stp':
-                await player.stop()
-            elif cmd == 'rpt':
-                # to stop: set repeat_flag False
-                asyncio.create_task(player.repeat_tracks(params[0], params[1]))
-
-    player = DfPlayer(0, 1)
-    # task to receive response words
-    asyncio.create_task(player.c_h.stream_tr.receiver())
-    # task to read and parse the response words
-    asyncio.create_task(player.c_h.consume_rx_data())
-    # task to monitor ADC input and set a trigger Event above a threshold
-    asyncio.create_task(player.c_h.check_vol_trigger())
-    # test task to print a line if the ADC trigger Event has been set
-    asyncio.create_task(while_playing(player.c_h.playing_ev, player.c_h.trigger_ev))
-    
-    print('Send commands')
-    cmd_file = 'test.txt'
-    commands = get_command_lines(cmd_file)
-    # repeat_flag is initialised False
-    player.repeat_flag = True  # allow repeat 
-    await run_commands(commands)
-    # let final 'rpt' command in test.txt run for 15s then stop
-    await asyncio.sleep(15)
-    # flag repeat_tracks task to stop to allow further commands
-    print('set repeat_flag False')
-    player.repeat_flag = False
-    await asyncio.sleep(5)  # let repeat_tracks finish
-    # additional commands can now be run
-    track_seq = [76, 75]
-    print(f'trk {track_seq}')
-    await player.track_sequence(track_seq)
-    
+    """"""
+    pass
 
 if __name__ == '__main__':
     try:
@@ -245,3 +158,4 @@ if __name__ == '__main__':
     finally:
         asyncio.new_event_loop()  # clear retained state
         print('test complete')
+        

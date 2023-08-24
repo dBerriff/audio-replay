@@ -11,7 +11,7 @@
 
 import uasyncio as asyncio
 from machine import UART, Pin
-from uart_os_as import Queue
+from uart_ba_as import Queue
 import hex_fns as hex_
 
 

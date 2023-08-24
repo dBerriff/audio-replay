@@ -10,4 +10,4 @@ trk 1
 nxt
 nxt
 prv
-rpt 5 1
+rpt 20 15
