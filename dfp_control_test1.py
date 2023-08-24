@@ -2,7 +2,10 @@
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
-from dfp_control import DfPlayer
+from machine import Pin, UART
+from uart_ba_as import StreamTR, Queue
+from dfp_app_as import CommandHandler
+from dfp_control import DfPlayer, HwSwitch
 
 
 async def main():
@@ -14,6 +17,18 @@ async def main():
         with open(filename) as fp:
             commands_ = [line for line in fp]
         return commands_
+    
+    async def adjust_volume(c_h_, button_0, button_1):
+        """ adjust volume up or down
+            - need to check for command conflict """
+        while True:
+            if button_0.state:
+                await player.vol_set(c_h_.volume + 1)
+                await player.q_vol()
+            elif button_1.state:
+                await player.vol_set(c_h_.volume - 1)
+                await player.q_vol()
+            await asyncio.sleep_ms(1000)
 
     async def run_commands(commands_):
         """ control DFP from simple text commands
@@ -57,19 +72,29 @@ async def main():
                 # to stop: set repeat_flag False
                 asyncio.create_task(player.repeat_tracks(params[0], params[1]))
 
-    player = DfPlayer(0, 1)
-    command_handler = player.c_h
-    # task to receive response words
+    bytearray_len = 10  # property of command set
+    q_item = bytearray(bytearray_len)
+    max_q_len = 16
+    queue = Queue(q_item, max_q_len)
+    
+    uart = UART(0, 9600)
+    uart.init(tx=Pin(0), rx=Pin(1))
+    stream = StreamTR(uart, bytearray_len, queue)
+    command_handler = CommandHandler(stream)
+    player = DfPlayer(command_handler)
+    switch_0 = HwSwitch(16)
+    switch_1 = HwSwitch(17)
+    # tasks to receive and process response words
     asyncio.create_task(command_handler.stream_tr.receiver())
-    # task to read and parse the response words
     asyncio.create_task(command_handler.consume_rx_data())
 
+    asyncio.create_task(adjust_volume(command_handler, switch_0, switch_1))
     print('Run commands')
     commands = get_command_lines('test.txt')
     # repeat_flag is initialised False
     player.repeat_flag = True  # allow repeat 
     await run_commands(commands)
-    await asyncio.sleep(15)
+    await asyncio.sleep(30)
     print('set repeat_flag False')
     player.repeat_flag = False
     await command_handler.track_end_ev.wait()

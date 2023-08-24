@@ -21,9 +21,9 @@ class Queue:
         - events should be set within tasks, hence coros for add and pop.
     """
 
-    def __init__(self, b_arr_size, max_q_len):
+    def __init__(self, q_item, max_q_len):
         self.max_len = max_q_len
-        self.queue = [bytearray(b_arr_size)] * max_q_len
+        self.queue = [q_item] * max_q_len
         self.head = 0
         self.next = 0
         self.is_data = asyncio.Event()
@@ -86,10 +86,9 @@ class StreamTR:
         await self.s_writer.drain()
 
     async def receiver(self):
-        """ coro: read data stream item into fixed-size buffer """
+        """ coro: read data stream item into buffer """
         while True:
             res = await self.s_reader.readinto(self.in_buf)
             if res == self.buf_size:
-                # add received bytearray to queue
                 await self.rx_queue.is_space.wait()
                 await self.rx_queue.put(bytearray(self.in_buf))

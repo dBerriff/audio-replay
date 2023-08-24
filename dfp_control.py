@@ -2,9 +2,7 @@
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
-from machine import Pin, UART
-from uart_ba_as import StreamTR, Queue
-from dfp_app_as import CommandHandler, AdcReader
+from machine import Pin
 from random import randint
 
 
@@ -21,21 +19,35 @@ def shuffle(tracks: list) -> tuple:
     return tuple(tracks)
 
 
+class HwSwitch:
+    """
+        input pin class for hardware switch or button
+        - PULL_UP logic
+        - returned states: 0 for off (open), 1 for on (closed)
+        - this inverts pull-up logic
+    """
+
+    def __init__(self, pin):
+        self.pin = pin  # for diagnostics
+        self._hw_in = Pin(pin, Pin.IN, Pin.PULL_UP)
+
+    @property
+    def state(self):
+        """ get switch state off (0) or on (1) """
+        return 0 if self._hw_in.value() == 1 else 1
+
+
 class DfPlayer:
     """ implement high-level control of the DFPlayer Mini
         - all replay is through command: 0x03 - play-track(n)
         - other commands have proved unnecessary or problematic
         - tracks are referenced by number counting from 1 """
     
-    byte_array_len = 10  # correct for DfPlayer Mini
+    bytearray_len = 10  # correct for DfPlayer Mini
+    max_q_len = 16
     
-    def __init__(self, tx_, rx_):
-        uart = UART(0, 9600)
-        uart.init(tx=Pin(tx_), rx=Pin(rx_))
-        queue = Queue(32)
-        # ADC input on pin 26
-        self.c_h = CommandHandler(
-            StreamTR(uart, self.byte_array_len, queue), AdcReader(26))
+    def __init__(self, c_h):
+        self.c_h = c_h
         self.track_min = 1
         self.track_max = 0
         self.track = 0
