@@ -1,4 +1,4 @@
-# dfp_app_as.py
+# dfp_mini.py
 """
 DFPlayer Mini (DFP): application
 See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for DFP documentation
@@ -9,8 +9,20 @@ Many DFP commands are not supported or buggy - use Python code instead.
 
 """
 
+from machine import Pin, ADC
 import uasyncio as asyncio
 import hex_fns as hex_f
+
+
+class AdcReader:
+    """ return ADC input as u16 property """
+    def __init__(self, pin):
+        self.adc = ADC(Pin(pin))
+
+    @property
+    def input(self):
+        """ ADC reading """
+        return self.adc.read_u16()
 
 
 class CommandHandler:
@@ -56,8 +68,9 @@ class CommandHandler:
     # inverse dictionary mapping
     str_hex = {value: key for key, value in hex_str.items()}
 
-    def __init__(self, stream):
+    def __init__(self, stream, adc):
         self.stream_tr = stream
+        self.adc = adc
         self.sender = stream.sender
         self.rx_queue = stream.rx_queue
         self.tx_word = bytearray(self.BUF_SIZE)
@@ -159,6 +172,16 @@ class CommandHandler:
             await self.rx_queue.is_data.wait()  # wait for data input
             self.rx_word = await self.rx_queue.get()
             parse_rx_message(self.rx_word)
+
+    async def check_vol_trigger(self):
+        """ read ADC input at intervals while track playing
+            - set trigger if volume threshold exceeded """
+        while True:
+            await self.playing_ev.wait()
+            while self.playing_ev.is_set():
+                if self.adc.input > self.threshold:
+                    self.trigger_ev.set()
+                await asyncio.sleep_ms(20)
 
 
 async def main():

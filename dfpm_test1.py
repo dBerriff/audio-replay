@@ -1,16 +1,30 @@
-# dfp_control.py
+# dfp_player.py
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
-from machine import Pin, UART
-from uart_ba_as import StreamTR, Queue
-from dfp_app_as import CommandHandler
-from dfp_control import DfPlayer, HwSwitch
+from machine import Pin
+from dfp_player import DfPlayer
+from dfp_mini import CommandHandler
 
 
 async def main():
     """ test DFPlayer controller """
-    
+
+    async def blink(led, period=1000):
+        """ coro: blink the onboard LED
+            - earlier versions of MicroPython require
+              25 rather than 'LED' if not Pico W
+        """
+        # flash LED every period ms approx.
+        on_time = 100
+        off_ms = period - on_time
+        for _ in range(10):
+            led.on()
+            await asyncio.sleep_ms(on_time)  # allow other tasks to run
+            led.off()
+            await asyncio.sleep_ms(off_ms)
+
+
     def get_command_lines(filename):
         """ read in command-lines from a text file
             - work-in-progress! """
@@ -18,18 +32,6 @@ async def main():
             commands_ = [line for line in fp]
         return commands_
     
-    async def adjust_volume(c_h_, button_0, button_1):
-        """ adjust volume up or down
-            - need to check for command conflict """
-        while True:
-            if button_0.state:
-                await player.vol_set(c_h_.volume + 1)
-                await player.q_vol()
-            elif button_1.state:
-                await player.vol_set(c_h_.volume - 1)
-                await player.q_vol()
-            await asyncio.sleep_ms(1000)
-
     async def run_commands(commands_):
         """ control DFP from simple text commands
             - format is: "cmd parameter" or "cmd, parameter"
@@ -72,41 +74,35 @@ async def main():
                 # to stop: set repeat_flag False
                 asyncio.create_task(player.repeat_tracks(params[0], params[1]))
 
-    bytearray_len = 10  # property of command set
-    q_item = bytearray(bytearray_len)
-    max_q_len = 16
-    queue = Queue(q_item, max_q_len)
-    
-    uart = UART(0, 9600)
-    uart.init(tx=Pin(0), rx=Pin(1))
-    stream = StreamTR(uart, bytearray_len, queue)
-    command_handler = CommandHandler(stream)
-    player = DfPlayer(command_handler)
-    switch_0 = HwSwitch(16)
-    switch_1 = HwSwitch(17)
-    # tasks to receive and process response words
-    asyncio.create_task(command_handler.stream_tr.receiver())
-    asyncio.create_task(command_handler.consume_rx_data())
 
-    asyncio.create_task(adjust_volume(command_handler, switch_0, switch_1))
+    onboard = Pin('LED', Pin.OUT, value=0)
+    asyncio.create_task(blink(onboard))
+    await asyncio.sleep_ms(2000)  # allow for power-up
+    print('Starting...')
+    ch_tr = CommandHandler()
+    player = DfPlayer(ch_tr)
+    # tasks to receive and process response words
+    asyncio.create_task(ch_tr.stream_tr.receiver())
+    asyncio.create_task(ch_tr.consume_rx_data())
+    await player.reset()
     print('Run commands')
     commands = get_command_lines('test.txt')
-    # repeat_flag is initialised False
     player.repeat_flag = True  # allow repeat 
     await run_commands(commands)
-    await asyncio.sleep(30)
+    await asyncio.sleep(15)
     print('set repeat_flag False')
     player.repeat_flag = False
-    await command_handler.track_end_ev.wait()
+    await player.q_fd_trk()
+    await ch_tr.track_end_ev.wait()
     # additional commands can now be run
     track_seq = [76, 75]
     print(f'trk {track_seq}')
     await player.track_sequence(track_seq)
-    
+
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     finally:
         asyncio.new_event_loop()  # clear retained state
-        print('test complete')
+        print('execution complete')

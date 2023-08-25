@@ -1,4 +1,4 @@
-# uart_ba_as.py
+# uart_q.py
 
 # uasyncio stream_tr I/O using UART
 # Author: Peter Hinch
@@ -17,8 +17,8 @@ import uasyncio as asyncio
 
 class Queue:
     """ simple FIFO list as queue
-        - is_data and is_space Event.is_set() controls access
-        - events should be set within tasks, hence coros for add and pop.
+        - is_data and is_space Events control access
+        - "events should be set within tasks" so coros for put and get.
     """
 
     def __init__(self, q_item, max_q_len):
@@ -28,18 +28,22 @@ class Queue:
         self.next = 0
         self.is_data = asyncio.Event()
         self.is_space = asyncio.Event()
+        self.put_lock = asyncio.Lock()
         self.is_space.set()
 
     async def put(self, item):
-        """ coro: add item to the queue """
-        self.queue[self.next] = item
-        self.next = (self.next + 1) % self.max_len
-        if self.next == self.head:
-            self.is_space.clear()
-        self.is_data.set()
+        """ coro: add item to the queue - multiple producers """
+        async with self.put_lock:
+            await self.is_space.wait()
+            self.queue[self.next] = item
+            self.next = (self.next + 1) % self.max_len
+            if self.next == self.head:
+                self.is_space.clear()
+            self.is_data.set()
 
     async def get(self):
-        """ coro: remove item from the queue """
+        """ coro: remove item from the queue - single consumer """
+        await self.is_data.wait()
         item = self.queue[self.head]
         self.head = (self.head + 1) % self.max_len
         if self.head == self.next:
@@ -51,10 +55,7 @@ class Queue:
     def q_len(self):
         """ number of items in the queue """
         if self.head == self.next:
-            if self.is_data.is_set():
-                n = self.max_len
-            else:
-                n = 0
+            n = self.max_len if self.is_data.is_set() else 0
         else:
             n = (self.next - self.head) % self.max_len
         return n
@@ -90,5 +91,4 @@ class StreamTR:
         while True:
             res = await self.s_reader.readinto(self.in_buf)
             if res == self.buf_size:
-                await self.rx_queue.is_space.wait()
                 await self.rx_queue.put(bytearray(self.in_buf))
