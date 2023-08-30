@@ -187,7 +187,7 @@ class AudioPlayer:
         s_button = self.skip_button
         while self._audio_channel.playing:
             if s_button and s_button.get_state() == 1:
-                self._audio_channel.stop()
+                self._audio_channel.pause()
                 print(s_button)
 
     def wait_button_press(self):

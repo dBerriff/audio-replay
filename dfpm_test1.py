@@ -24,7 +24,6 @@ async def main():
             led.off()
             await asyncio.sleep_ms(off_ms)
 
-
     def get_command_lines(filename):
         """ read in command-lines from a text file
             - work-in-progress! """
@@ -60,45 +59,54 @@ async def main():
                 # parameters required as int
                 await player.track_sequence(params)
             elif cmd == 'nxt':
-                await player.next_trk()
+                await player.next_track()
             elif cmd == 'prv':
-                await player.prev_trk()
+                await player.prev_track()
             elif cmd == 'rst':
                 await player.reset()
             elif cmd == 'vol':
                 await player.vol_set(params[0])
                 await player.q_vol()
             elif cmd == 'stp':
-                await player.stop()
+                await player.pause()
             elif cmd == 'rpt':
                 # to stop: set repeat_flag False
                 asyncio.create_task(player.repeat_tracks(params[0], params[1]))
 
-
     onboard = Pin('LED', Pin.OUT, value=0)
     asyncio.create_task(blink(onboard))
-    await asyncio.sleep_ms(2000)  # allow for power-up
+    # allow for player power-up
+    await asyncio.sleep_ms(2000)
     print('Starting...')
     ch_tr = CommandHandler()
-    player = DfPlayer(ch_tr)
     # tasks to receive and process response words
     asyncio.create_task(ch_tr.stream_tr.receiver())
     asyncio.create_task(ch_tr.consume_rx_data())
+    player = DfPlayer(ch_tr)
     await player.reset()
+    await player.vol_set(15)
+    await player.q_fd_track()  # query current track
     print('Run commands')
+
     commands = get_command_lines('test.txt')
     player.repeat_flag = True  # allow repeat 
     await run_commands(commands)
-    await asyncio.sleep(15)
+    await asyncio.sleep(5)
     print('set repeat_flag False')
     player.repeat_flag = False
-    await player.q_fd_trk()
-    await ch_tr.track_end_ev.wait()
-    # additional commands can now be run
-    track_seq = [76, 75]
-    print(f'trk {track_seq}')
-    await player.track_sequence(track_seq)
+    await player.track_end.wait()
 
+    # additional commands can now be run
+
+    await player.play_track(79)
+    await asyncio.sleep_ms(1000)
+    await player.pause()
+    await asyncio.sleep_ms(1000)
+    await player.play()
+    await asyncio.sleep_ms(1000)
+    await player.track_end.wait()
+    await player.play_track(1)
+    await asyncio.sleep_ms(1000)
 
 if __name__ == '__main__':
     try:

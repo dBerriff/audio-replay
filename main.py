@@ -19,9 +19,9 @@ async def main():
         on_time = 100
         off_ms = period - on_time
         while True:
-            led.on()
+            led.PIN_ON()
             await asyncio.sleep_ms(on_time)  # allow other tasks to run
-            led.off()
+            led.PIN_OFF()
             await asyncio.sleep_ms(off_ms)
 
 
@@ -60,16 +60,16 @@ async def main():
                 # parameters required as int
                 await player.track_sequence(params)
             elif cmd == 'nxt':
-                await player.next_trk()
+                await player.next_track()
             elif cmd == 'prv':
-                await player.prev_trk()
+                await player.prev_track()
             elif cmd == 'rst':
                 await player.reset()
             elif cmd == 'vol':
                 await player.vol_set(params[0])
                 await player.q_vol()
             elif cmd == 'stp':
-                await player.stop()
+                await player.pause()
             elif cmd == 'rpt':
                 # to stop: set repeat_flag False
                 asyncio.create_task(player.repeat_tracks(params[0], params[1]))
@@ -92,7 +92,7 @@ async def main():
     await asyncio.sleep(15)
     print('set repeat_flag False')
     player.repeat_flag = False
-    await player.q_fd_trk()
+    await player.q_fd_track()
     await ch_tr.track_end_ev.wait()
     # additional commands can now be run
     track_seq = [76, 75]

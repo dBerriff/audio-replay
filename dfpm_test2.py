@@ -6,6 +6,7 @@ from machine import Pin
 from dfp_player import DfPlayer
 from dfp_mini import CommandHandler
 
+
 class HwSwitch:
     """
         input pin class for hardware switch or button
@@ -54,7 +55,7 @@ async def main():
             sw.player_ready.clear()
             sw.is_on.clear()
             track = index + 1
-            await player.play_trk(track)
+            await player.play_track(track)
             await asyncio.sleep_ms(1000)
 
 

@@ -33,6 +33,7 @@ class DfPlayer:
         self.track_count = 0
         self.track = 0
         self.repeat_flag = False
+        self.track_end = self.ch_tr.track_end_ev
 
     async def reset(self):
         """ coro: reset the DFPlayer """
@@ -42,32 +43,46 @@ class DfPlayer:
         self.track_count = self.ch_tr.track_count
         print(f'Number of tracks: {self.track_count}')
 
-    async def play_trk(self, track):
-        """ coro: play track n """
-        if track < self.track_min or track > self.track_count:
-            return
-        print(f'play_track: {track}')
-        self.track = track
-        await self.ch_tr.play_trk(track)
+    async def play_track(self, track):
+        """ coro: play track n
+            - does not wait for track_end: allows pause
+        """
+        if self.track_min <= track <= self.track_count:
+            self.track = track
+            await self.ch_tr.play_track(track)
 
-    async def next_trk(self):
+    async def play_full_track(self, track):
+        """ coro: play track n
+            - waits for track_end; no pause allowed
+        """
+        if self.track_min <= track <= self.track_count:
+            await self.play_track(track)
+            await self.track_end.wait()
+        
+
+    async def next_track(self):
         """ coro: play next track """
         self.track += 1
         if self.track > self.track_count:
             self.track = self.track_min
-        await self.play_trk(self.track)
+        await self.play_full_track(self.track)
 
-    async def prev_trk(self):
+    async def prev_track(self):
         """ coro: play previous track """
         self.track -= 1
         if self.track < self.track_min:
             self.track = self.track_count
-        await self.play_trk(self.track)
+        await self.play_full_track(self.track)
     
-    async def stop(self):
-        """ coro: stop playing """
-        await self.ch_tr.stop()
-        print('DFPlayer stopped')
+    async def play(self):
+        """ coro: play or resume current track """
+        await self.ch_tr.play()
+        print('DFPlayer play')
+
+    async def pause(self):
+        """ coro: pause playing current track """
+        await self.ch_tr.pause()
+        print('DFPlayer pause')
 
     async def vol_set(self, level):
         """ coro: set volume level 0-30 """
@@ -78,22 +93,22 @@ class DfPlayer:
     async def q_vol(self):
         """ coro: query volume level """
         await self.ch_tr.q_vol()
-        print(f'Volume level: {self.ch_tr.volume} (0-30)')
+        print(f'Volume level: {self.ch_tr.vol} (0-30)')
 
     async def q_fd_files(self):
         """ coro: query number of FD files (in root?) """
         await self.ch_tr.q_sd_files()
         print(f'Number of SD-card files: {self.ch_tr.track_count}')
 
-    async def q_fd_trk(self):
+    async def q_fd_track(self):
         """ coro: query current track number """
-        await self.ch_tr.q_tf_trk()
+        await self.ch_tr.q_tf_track()
         print(f'Current track: {self.ch_tr.track}')
 
     async def track_sequence(self, sequence):
         """ coro: play sequence of tracks by number """
         for track_ in sequence:
-            await self.play_trk(track_)
+            await self.play_full_track(track_)
 
     async def repeat_tracks(self, start, end):
         """ coro: play a range of tracks from start to end inclusive
@@ -103,16 +118,11 @@ class DfPlayer:
             - to enable: must set repeat_flag True
             - to stop: set repeat_flag False
         """
-        if end > start:
-            inc = +1
-        elif end < start:
-            inc = -1  # count down through tracks
-        else:
-            return
+        inc = -1 if end < start else 1
         rewind = end + inc
         trk_counter = start
         while self.repeat_flag:
-            await self.play_trk(trk_counter)
+            await self.play_full_track(trk_counter)
             trk_counter += inc
             if trk_counter == rewind:  # end of list
                 trk_counter = start

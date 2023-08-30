@@ -27,10 +27,14 @@ class CommandHandler:
     P_L = const(6)
     C_M = const(7)  # checksum
     C_L = const(8)
-
     R_FB = const(1)  # require ACK feedback
     # fixed bytearray elements by index
     data_template = {0: 0x7E, 1: 0xFF, 2: 0x06, 4: R_FB, 9: 0xEF}
+
+    VOL_MAX = const(30)
+    VOL_MIN = const(0)
+
+    Q_LEN = const(8)
     
     # command dictionary
     hex_str = {
@@ -39,7 +43,8 @@ class CommandHandler:
         0x06: 'vol_set',  # 0-30
         0x07: 'eq_set',  # 0:normal/1:pop/2:rock/3:jazz/4:classic/5:bass
         0x0c: 'reset',
-        0x0e: 'stop',
+        0x0d: 'play',
+        0x0e: 'pause',
         # information return
         0x3a: 'media_insert',
         0x3b: 'media_remove',
@@ -72,7 +77,9 @@ class CommandHandler:
         self.rx_param = 0x0000
         self.rx_cmd = 0x00
 
-        self.volume = 0  # returned from dfp
+        self.vol = 0  # returned from dfp
+        self.vol_min = 0
+        self.vol_max = 30
         self.track_count = 0
         self.track = 0
         self.ack_ev = asyncio.Event()
@@ -140,7 +147,7 @@ class CommandHandler:
         elif rx_cmd == 0x40:  # error
             self.error_ev.set()  # not currently monitored
         elif rx_cmd == 0x43:  # q_vol
-            self.volume = rx_param
+            self.vol = rx_param
         elif rx_cmd == 0x48:  # q_tf_files
             self.track_count = rx_param
         elif rx_cmd == 0x4c:  # q_tf_trk
@@ -175,22 +182,24 @@ class CommandHandler:
         # get number of TF-card files for track_max
         return self.rx_cmd, self.rx_param
 
-    async def play_trk(self, track):
+    async def play_track(self, track):
         """ coro: play track n """
         await self.send_command(0x03, track)
-        await self.track_end_ev.wait()
 
-    async def stop(self):
+    async def play(self):
+        """ coro: stop playing """
+        await self.send_command(0x0d, 0)
+
+    async def pause(self):
         """ coro: stop playing """
         await self.send_command(0x0e, 0)
-        self.track_end_ev.set()
 
     async def vol_set(self, level):
         """ coro: set volume level 0-30 """
         if level > 30:
             level = 30
         await self.send_command(0x06, level)
-        self.volume = level
+        self.vol = level
 
     async def q_vol(self):
         """ coro: query volume level """
@@ -200,13 +209,13 @@ class CommandHandler:
         """ coro: query number of TF/SD files (in root?) """
         await self.send_command(0x48)
 
-    async def q_tf_trk(self):
+    async def q_tf_track(self):
         """ coro: query current track number """
         await self.send_command(0x4c)
 
     async def adjust_volume(self, delta):
         """ adjust volume up or down - must be run as task """
-        await self.vol_set(self.volume + delta)
+        await self.vol_set(self.vol + delta)
         await self.q_vol()
         await asyncio.sleep_ms(1000)
 
