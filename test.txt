@@ -1,4 +1,4 @@
-# test file for df_control.py
+# test file for audio_player.py
 vol 15
 trk 76  9  25
 zzz 2

@@ -1,9 +1,9 @@
-# dfp_player.py
+# audio_player.py
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
 from machine import Pin
-from dfp_player import DfPlayer
+from audio_player import DfPlayer
 from dfp_mini import CommandHandler
 
 
@@ -39,7 +39,7 @@ async def main():
     print('Starting...')
     sw = HwSwitch(16)
     ch_tr = CommandHandler()
-    player = DfPlayer(ch_tr)
+    player = DfPlayer()
     # tasks to receive and process response words
     asyncio.create_task(ch_tr.stream_tr.receiver())
     asyncio.create_task(ch_tr.consume_rx_data())

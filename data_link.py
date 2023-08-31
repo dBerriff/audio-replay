@@ -1,4 +1,4 @@
-# uart_q.py
+# data_link.py
 
 # uasyncio stream_tr I/O using UART
 # Author: Peter Hinch

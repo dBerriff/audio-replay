@@ -10,9 +10,9 @@ Many DFP commands are not supported or buggy - use Python code instead.
 """
 
 import uasyncio as asyncio
-import hex_fns as hex_f
 from machine import Pin, UART
-from uart_q import StreamTR, Queue
+from data_link import StreamTR, Queue
+import hex_fns as hex_f
 
 
 class CommandHandler:
@@ -48,16 +48,16 @@ class CommandHandler:
         # information return
         0x3a: 'media_insert',
         0x3b: 'media_remove',
-        0x3d: 'tf_fin',  # sd track finished
-        0x3f: 'q_init',  # returns: 02 for TF-card
+        0x3d: 'sd_fin',  # sd track finished
+        0x3f: 'qry_init',  # returns: 02 for TF-card
         0x40: 'error',
         0x41: 'ack',
         # query status
-        0x42: 'q_status',  # 0: stopped; 1: playing; 2: paused
-        0x43: 'q_vol',
-        0x44: 'q_eq',
-        0x48: 'q_tf_files',  # number of files, in root directory
-        0x4c: 'q_tf_trk'
+        0x42: 'qry_status',  # 0: stopped; 1: playing; 2: paused
+        0x43: 'qry_vol',
+        0x44: 'qry_eq',
+        0x48: 'qry_sd_files',  # number of files, in root directory
+        0x4c: 'qry_tf_trk'
         }
     
     # inverse dictionary mapping
@@ -67,8 +67,7 @@ class CommandHandler:
         uart = UART(0, 9600)
         uart.init(tx=Pin(0), rx=Pin(1))
         q_item = bytearray(self.BA_SIZE)
-        max_q_len = 8
-        queue = Queue(q_item, max_q_len)
+        queue = Queue(q_item, self.Q_LEN)
         self.stream_tr = StreamTR(uart, self.BA_SIZE, queue)
         self.sender = self.stream_tr.sender
         self.tx_word = bytearray(self.BA_SIZE)
@@ -205,11 +204,11 @@ class CommandHandler:
         """ coro: query volume level """
         await self.send_command(0x43)
 
-    async def q_tf_files(self):
+    async def q_sd_files(self):
         """ coro: query number of TF/SD files (in root?) """
         await self.send_command(0x48)
 
-    async def q_tf_track(self):
+    async def q_sd_track(self):
         """ coro: query current track number """
         await self.send_command(0x4c)
 

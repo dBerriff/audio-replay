@@ -1,28 +1,13 @@
-# dfp_player.py
+# audio_player.py
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
-from machine import Pin
-from dfp_player import DfPlayer
-from dfp_mini import CommandHandler
+from audio_player import DfPlayer
+from ap_support import Led
 
 
 async def main():
     """ test DFPlayer controller """
-
-    async def blink(led, period=1000):
-        """ coro: blink the onboard LED
-            - earlier versions of MicroPython require
-              25 rather than 'LED' if not Pico W
-        """
-        # flash LED every period ms approx.
-        on_time = 100
-        off_ms = period - on_time
-        for _ in range(10):
-            led.on()
-            await asyncio.sleep_ms(on_time)  # allow other tasks to run
-            led.off()
-            await asyncio.sleep_ms(off_ms)
 
     def get_command_lines(filename):
         """ read in command-lines from a text file
@@ -73,19 +58,17 @@ async def main():
                 # to stop: set repeat_flag False
                 asyncio.create_task(player.repeat_tracks(params[0], params[1]))
 
-    onboard = Pin('LED', Pin.OUT, value=0)
-    asyncio.create_task(blink(onboard))
+    onboard = Led('LED')
+    asyncio.create_task(onboard.blink(10))
     # allow for player power-up
     await asyncio.sleep_ms(2000)
     print('Starting...')
-    ch_tr = CommandHandler()
-    # tasks to receive and process response words
-    asyncio.create_task(ch_tr.stream_tr.receiver())
-    asyncio.create_task(ch_tr.consume_rx_data())
-    player = DfPlayer(ch_tr)
+
+    player = DfPlayer()
     await player.reset()
     await player.vol_set(15)
-    await player.q_fd_track()  # query current track
+    await player.q_vol()
+    await player.q_sd_track()  # query current track
     print('Run commands')
 
     commands = get_command_lines('test.txt')
@@ -94,18 +77,11 @@ async def main():
     await asyncio.sleep(5)
     print('set repeat_flag False')
     player.repeat_flag = False
-    await player.track_end.wait()
+    await player.track_end.wait()  # blocking must be in this task
 
     # additional commands can now be run
-
-    await player.play_track(79)
-    await asyncio.sleep_ms(1000)
-    await player.pause()
-    await asyncio.sleep_ms(1000)
-    await player.play()
-    await asyncio.sleep_ms(1000)
-    await player.track_end.wait()
-    await player.play_track(1)
+    await player.play_track_seq(79)
+    await player.play_track_seq(1)
     await asyncio.sleep_ms(1000)
 
 if __name__ == '__main__':

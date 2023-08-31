@@ -6,7 +6,41 @@
 import uasyncio as asyncio
 from machine import Pin
 from micropython import const
+import json
 from time import ticks_ms, ticks_diff
+
+
+class Led:
+    """ implement pin-driven LED """
+    
+    def __init__(self, pin):
+        self.led = Pin(pin, Pin.OUT, value=0)
+
+    async def blink(self, n_blinks):
+        """ coro: blink the onboard LED
+            - earlier versions of MicroPython require
+              25 rather than 'LED' if not Pico W
+        """
+        # flash LED every 1000 ms
+        on_ms = 100
+        off_ms = 900
+        for _ in range(n_blinks):
+            self.led.on()
+            await asyncio.sleep_ms(on_ms)
+            self.led.off()
+            await asyncio.sleep_ms(off_ms)
+
+
+def write_config(filename, data):
+    """ write configuration dictionary """
+    with open(filename, 'w') as write_f:
+        json.dump(data, write_f)
+
+
+def read_config(filename):
+    with open(filename, 'r') as read_f:
+        data = json.load(read_f)
+    return data
 
 
 class Button:
@@ -75,7 +109,6 @@ class VolButtons:
         self.vol_max = 30
         self.vol_min = 0
 
-    
     async def poll_vol_buttons(self):
         """ change player volume setting """
         asyncio.create_task(self.btn_up.poll_state())
@@ -98,14 +131,17 @@ class VolButtons:
 async def main():
     """ test button input """
 
-    async def report_vol_change(vol_buttons):
+    async def report_vol_change(vol_buttons_):
         """"""
         while True:
-            await vol_buttons.vol_change.wait()
-            print(f'volume setting: {vol_buttons.vol}')
-            vol_buttons.vol_change.clear()
+            await vol_buttons_.vol_change.wait()
+            print(f'volume setting: {vol_buttons_.vol}')
+            vol_buttons_.vol_change.clear()
 
     print('In main()')
+    
+    onboard = Led('LED')
+    asyncio.create_task(onboard.blink(10))
 
     vol_buttons = VolButtons(20, 21)
     asyncio.create_task(report_vol_change(vol_buttons))
