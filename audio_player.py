@@ -52,10 +52,10 @@ class DfPlayer:
     async def reset(self):
         """ coro: reset the DFPlayer """
         rx_cmd, rx_param = await self.cmd_h.reset()
-        print(f'Reset returned: cmd: {rx_cmd:0x} param: {rx_param}')
-        await self.cmd_h.q_sd_files()
+        print(f'Reset return: cmd: {rx_cmd:0x}, param: {rx_param}')
+        await self.cmd_h.qry_sd_files()
         self.track_count = self.cmd_h.track_count
-        print(f'Number of tracks: {self.track_count}')
+        print(f'Number of SD tracks: {self.track_count}')
 
     async def play_track(self, track):
         """ coro: play track n
@@ -84,19 +84,19 @@ class DfPlayer:
 
     # query player attributes
 
-    async def q_vol(self):
+    async def qry_vol(self):
         """ coro: query volume level """
-        await self.cmd_h.q_vol()
+        await self.cmd_h.qry_vol()
         print(f'DFPlayer volume: {self.cmd_h.vol} (0-30)')
 
-    async def q_sd_files(self):
+    async def qry_sd_files(self):
         """ coro: query number of SD files (in root?) """
-        await self.cmd_h.q_sd_files()
+        await self.cmd_h.qry_sd_files()
         print(f'Number of SD-card files: {self.cmd_h.track_count}')
 
-    async def q_sd_track(self):
+    async def qry_sd_track(self):
         """ coro: query current track number """
-        await self.cmd_h.q_sd_track()
+        await self.cmd_h.qry_sd_track()
         print(f'Current track: {self.cmd_h.track}')
 
     # additional play commands

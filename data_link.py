@@ -8,11 +8,11 @@
     adapted and developed by David B Jones for Famous Trains Derby.
     - http://www.famoustrains.org.uk
     - uses Queue for receive stream_tr although not actually required at 9600 BAUD
-    - ! deque is not implemented in MP: code uses list
-    - uses 'one-shot' send for commands
+    - ! deque is not implemented in MP so code uses list
 """
 
 import uasyncio as asyncio
+from machine import Pin, UART
 
 
 class Queue:
@@ -53,7 +53,7 @@ class Queue:
 
     @property
     def q_len(self):
-        """ number of items in the queue """
+        """ number of items in the queue: for testing """
         if self.head == self.next:
             n = self.max_len if self.is_data.is_set() else 0
         else:
@@ -61,7 +61,7 @@ class Queue:
         return n
 
     def q_dump(self):
-        """ print out queue pointers and all item values """
+        """ print out queue pointers and all item values: for testing """
         print(f'head: {self.head}; next: {self.next}')
         q_str = '['
         for i in range(self.max_len):
@@ -92,3 +92,15 @@ class StreamTR:
             res = await self.s_reader.readinto(self.in_buf)
             if res == self.buf_size:
                 await self.rx_queue.put(bytearray(self.in_buf))
+
+
+class DataLink:
+    """ implement data link between player app and device """
+
+    def __init__(self, pin_tx, pin_rx, ba_size, q_len=8):
+        uart = UART(0, 9600)  # fixed baud rate for DFP mini
+        uart.init(tx=Pin(pin_tx), rx=Pin(pin_rx))
+        q_item = bytearray(ba_size)
+        self.rx_queue = Queue(q_item, q_len)
+        self.stream_tr = StreamTR(uart, ba_size, self.rx_queue)
+        self.sender = self.stream_tr.sender

@@ -10,8 +10,7 @@ async def main():
     """ test DFPlayer controller """
 
     def get_command_lines(filename):
-        """ read in command-lines from a text file
-            - work-in-progress! """
+        """ read in command-lines from a text file """
         with open(filename) as fp:
             commands_ = [line for line in fp]
         return commands_
@@ -51,24 +50,28 @@ async def main():
                 await player.reset()
             elif cmd == 'vol':
                 await player.vol_set(params[0])
-                await player.q_vol()
+                await player.qry_vol()
             elif cmd == 'stp':
                 await player.pause()
             elif cmd == 'rpt':
                 # to stop: set repeat_flag False
                 asyncio.create_task(player.repeat_tracks(params[0], params[1]))
 
+    async def startup(player_):
+        """ player startup sequence """
+        print('Starting...')
+        await player_.reset()
+        await player_.vol_set(15)
+        await player_.qry_vol()
+    
+    
     onboard = Led('LED')
     asyncio.create_task(onboard.blink(10))
     # allow for player power-up
     await asyncio.sleep_ms(2000)
-    print('Starting...')
 
     player = DfPlayer()
-    await player.reset()
-    await player.vol_set(15)
-    await player.q_vol()
-    await player.q_sd_track()  # query current track
+    await startup(player)
     print('Run commands')
 
     commands = get_command_lines('test.txt')
