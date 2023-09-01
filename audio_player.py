@@ -6,7 +6,7 @@ from random import randint
 from dfp_mini import CommandHandler
 
 
-def shuffle(tracks: list) -> tuple:
+def shuffle(tracks):
     """ return a shuffled tuple (or list)
         - Durstenfeld / Fisher-Yates shuffle algorithm """
     n = len(tracks)
@@ -16,36 +16,29 @@ def shuffle(tracks: list) -> tuple:
     for i in range(limit):  # exclusive range
         j = randint(i, limit)  # inclusive range
         tracks[i], tracks[j] = tracks[j], tracks[i]
-    return tuple(tracks)
+    return tracks
 
 
 class DfPlayer:
-    """ implement high-level control of the DFPlayer Mini
-        - all replay is through command: 0x03 - play-track(n)
-        - other commands have proved unnecessary or problematic
-        - tracks are referenced by number counting from 1 """
+    """ implement high-level control of audio track player
+        - tracks are referenced by number counting from 1
+        - volume is set in range 0 - 10 and scaled
+    """
     
-    bytearray_len = 10  # correct for DfPlayer Mini
-    max_q_len = 16
-    
+    VOL_FACTOR = const(3)  # for physical player
+
     def __init__(self):
         self.cmd_h = CommandHandler()
         self.track_min = 1
         self.track_count = 0
         self.track = 0
         self.repeat_flag = False
-        # self.track_playing = self.cmd_h.playing_ev
+        self.eq_options = self.cmd_h.eq_options
         self.track_end = self.cmd_h.track_end_ev
         self.track_end.set()
-        
         # tasks to receive and process response words
         asyncio.create_task(self.cmd_h.stream_tr.receiver())
         asyncio.create_task(self.cmd_h.consume_rx_data())
-
-    @property
-    def volume(self):
-        """ player volume setting """
-        return self.cmd_h.vol
 
     # basic commands
     
@@ -76,18 +69,27 @@ class DfPlayer:
         print('Pause')
         await self.cmd_h.pause()
 
-    async def vol_set(self, level):
-        """ coro: set volume level 0-30 """
-        if level > 30:
-            level = 30
-        await self.cmd_h.vol_set(level)
+    async def set_vol(self, level):
+        """ coro: set volume level 0-10 """
+        if 0 <= level <= 10:
+            await self.cmd_h.set_vol(level * self.VOL_FACTOR)
+
+    async def set_eq(self, setting):
+        """ coro: set eq to preset """
+        print(f'Set eq: {setting}')
+        await self.cmd_h.set_eq(setting)
 
     # query player attributes
 
     async def qry_vol(self):
         """ coro: query volume level """
         await self.cmd_h.qry_vol()
-        print(f'DFPlayer volume: {self.cmd_h.vol} (0-30)')
+        print(f'DFPlayer volume: {self.cmd_h.vol // self.VOL_FACTOR} (0-10)')
+
+    async def qry_eq(self):
+        """ coro: query volume level """
+        await self.cmd_h.qry_eq()
+        print(f'DFPlayer eq: {self.cmd_h.eq}')
 
     async def qry_sd_files(self):
         """ coro: query number of SD files (in root?) """
@@ -135,6 +137,7 @@ class DfPlayer:
             - to enable: must set repeat_flag True
             - to stop: set repeat_flag False
         """
+        self.repeat_flag = True
         inc = -1 if end < start else 1
         rewind = end + inc
         trk_counter = start

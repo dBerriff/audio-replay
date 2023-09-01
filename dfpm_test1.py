@@ -3,7 +3,7 @@
 
 import uasyncio as asyncio
 from audio_player import DfPlayer
-from ap_support import Led
+from dfp_support import Led, VolButtons
 
 
 async def main():
@@ -61,10 +61,12 @@ async def main():
         """ player startup sequence """
         print('Starting...')
         await player_.reset()
-        await player_.vol_set(15)
+        await player_.set_vol(4)
         await player_.qry_vol()
-    
-    
+        print(f'Player eq options: {player_.eq_options}')
+        await player_.set_eq('bass')
+        await player.qry_eq()
+
     onboard = Led('LED')
     asyncio.create_task(onboard.blink(10))
     # allow for player power-up
@@ -72,20 +74,9 @@ async def main():
 
     player = DfPlayer()
     await startup(player)
-    print('Run commands')
+    await player.repeat_tracks(1, player.track_count)
 
-    commands = get_command_lines('test.txt')
-    player.repeat_flag = True  # allow repeat 
-    await run_commands(commands)
-    await asyncio.sleep(5)
-    print('set repeat_flag False')
-    player.repeat_flag = False
-    await player.track_end.wait()  # blocking must be in this task
 
-    # additional commands can now be run
-    await player.play_track_seq(79)
-    await player.play_track_seq(1)
-    await asyncio.sleep_ms(1000)
 
 if __name__ == '__main__':
     try:

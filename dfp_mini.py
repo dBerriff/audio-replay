@@ -57,10 +57,15 @@ class CommandHandler:
         0x4c: 'qry_tf_trk'
         }
 
-    eq = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
-    
     # inverse dictionary mapping
     str_hex = {value: key for key, value in hex_str.items()}
+    # eq dicts, and values as string
+    eq_val = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
+    val_eq = {value: key for key, value in eq_val.items()}
+    eq_options = ''
+    for key in eq_val:
+        eq_options += f'{key}, '
+    eq_options = eq_options[:-2]
 
     def __init__(self):
         self.data_link = DataLink(0, 1, 10)
@@ -72,9 +77,10 @@ class CommandHandler:
         self.rx_param = 0x0000
         self.rx_cmd = 0x00
 
-        self.vol = 0  # returned from dfp
+        self.vol = 0
         self.vol_min = 0
         self.vol_max = 30
+        self.eq = 'normal'
         self.track_count = 0
         self.track = 0
         self.ack_ev = asyncio.Event()
@@ -139,6 +145,8 @@ class CommandHandler:
             self.error_ev.set()  # not currently monitored
         elif rx_cmd == 0x43:  # qry_vol
             self.vol = rx_param
+        elif rx_cmd == 0x44:  # qry_eq
+            self.eq = self.val_eq[rx_param]
         elif rx_cmd == 0x48:  # qry_tf_files
             self.track_count = rx_param
         elif rx_cmd == 0x4c:  # qry_sd_trk
@@ -176,15 +184,6 @@ class CommandHandler:
         await self._send_command(0x03, track)
         self.track = track
 
-    async def set_eq(self, setting):
-        """ set eq to preset setting
-            - setting: 'normal', 'pop', 'rock', 'jazz', 'classic', 'bass'
-        """
-        if setting in self.eq:
-            await self._send_command(0x07, self.eq[setting])
-        else:
-            await self._send_command(0x07, self.eq['normal'])
-
     async def play(self):
         """ coro: stop playing """
         await self._send_command(0x0d, 0)
@@ -193,16 +192,29 @@ class CommandHandler:
         """ coro: stop playing """
         await self._send_command(0x0e, 0)
 
-    async def vol_set(self, level):
+    async def set_vol(self, level):
         """ coro: set volume level 0-30 """
         if level > 30:
             level = 30
         await self._send_command(0x06, level)
         self.vol = level
 
+    async def set_eq(self, setting):
+        """ set eq to preset setting
+            - setting: 'normal', 'pop', 'rock', 'jazz', 'classic', 'bass'
+        """
+        if setting in self.eq_val:
+            await self._send_command(0x07, self.eq_val[setting])
+        else:
+            await self._send_command(0x07, self.eq_val['normal'])
+
     async def qry_vol(self):
         """ coro: query volume level """
         await self._send_command(0x43)
+
+    async def qry_eq(self):
+        """ coro: query volume level """
+        await self._send_command(0x44)
 
     async def qry_sd_files(self):
         """ coro: query number of TF/SD files (in root?) """
@@ -214,7 +226,7 @@ class CommandHandler:
 
     async def adjust_volume(self, delta):
         """ adjust volume up or down - must be run as task """
-        await self.vol_set(self.vol + delta)
+        await self.set_vol(self.vol + delta)
         await self.qry_vol()
         await asyncio.sleep_ms(1000)
 
