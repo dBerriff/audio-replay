@@ -3,7 +3,7 @@
 
 import uasyncio as asyncio
 from audio_player import DfPlayer
-from dfp_support import Led, VolButtons
+from dfp_support import Led, DfpButtons
 
 
 async def main():

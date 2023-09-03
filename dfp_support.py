@@ -13,14 +13,12 @@ from time import ticks_ms, ticks_diff
 
 class Led:
     """ pin-driven LED """
-    
     def __init__(self, pin):
         self.led = Pin(pin, Pin.OUT, value=0)
         self.led.off()
 
     async def blink(self, n):
         """ coro: blink the LED n times """
-        # flash LED every 1000 ms
         for _ in range(n):
             await asyncio.sleep_ms(900)
             self.led.on()
@@ -30,39 +28,34 @@ class Led:
 
 class ConfigFile:
     """ write and read json config files """
-    
     def __init__(self, filename):
         self.filename = filename
-        self.is_file = self.is_config()
-    
-    def write_config(self, data):
+
+    def write_file(self, data):
         """ write config file as json dict """
         with open(self.filename, 'w') as write_f:
             json.dump(data, write_f)
-            self.is_file = True
 
-    def read_config(self):
+    def read_file(self):
         """ return config data dict from file
             - calling code checks is_config() """
         with open(self.filename, 'r') as read_f:
             data = json.load(read_f)
         return data
 
-    def is_config(self):
+    def is_file(self):
         """ check if config file exists """
         return self.filename in os.listdir()
         
 
 class Button:
     """ button with click state - no debounce """
-
     PIN_ON = const(0)
     PIN_OFF = const(1)
     CLICK = const(1)
 
-    def __init__(self, pin, name=''):
+    def __init__(self, pin):
         self._hw_in = Pin(pin, Pin.IN, Pin.PULL_UP)
-        self.name = name
         self.state = 0
         self.press_ev = asyncio.Event()
 
@@ -92,8 +85,8 @@ class HoldButton(Button):
     HOLD = const(2)
     T_HOLD = const(750)  # ms - adjust as required
 
-    def __init__(self, pin, name=''):
-        super().__init__(pin, name)
+    def __init__(self, pin):
+        super().__init__(pin)
 
     async def poll_state(self):
         """ poll self for press or hold events
@@ -117,18 +110,22 @@ class HoldButton(Button):
             await asyncio.sleep_ms(20)
 
 
-class VolButtons:
-    """ player vol inc and dec buttons """
+class DfpButtons:
+    """ player buttons """
     
-    def __init__(self, pin_up, pin_down, config_file):
-        self.btn_inc = HoldButton(pin_up, 'v_inc')
-        self.btn_dec = HoldButton(pin_down, 'v_dec')
+    def __init__(self, play, v_dec, v_inc, config_file):
+        self.buttons = {
+            'play': Button(play),
+            'v_inc': HoldButton(v_inc),
+            'v_dec': HoldButton(v_dec)
+        }
+        self.led = Led('LED')
+        self.cf = config_file
+        self.track = 1
         self.vol_max = 10
         self.vol_min = 0
-        self.cf = config_file
         self.config = {}
         self.init_config()
-        self.led = Led('LED')
 
     @property
     def vol(self):
@@ -141,75 +138,90 @@ class VolButtons:
 
     def init_config(self):
         """ initialise from file or set to mid-point """
-        if self.cf.is_config:
-            self.config = self.cf.read_config()
+        if self.cf.is_file():
+            self.config = self.cf.read_file()
         else:
             self.config = {'vol': 5}
+            self.save_config()
         self.vol = self.config['vol']
-        print(f'Volume set to: {self.vol}')
+        print(f'Volume: {self.vol}')
+
+    def play_track(self):
+        """ play current track """
+        # TEST
+        print(f'Play track: {self.track}')
+        self.track += 1
 
     def inc_vol(self):
         """ increment volume by 1 unit """
+        # TEST
         if self.vol < self.vol_max:
-            self.vol += 1 
+            self.vol += 1
+            print(f'Volume: {self.vol}')
     
     def dec_vol(self):
         """ decrement volume by 1 unit """
+        # TEST
         if self.vol > self.vol_min:
-            self.vol -= 1 
+            self.vol -= 1
+            print(f'Volume: {self.vol}')
     
     def save_config(self):
         """ save volume setting """
-        print('Configuration saved')
-        self.cf.write_config(self.config)
+        print('Save config')
+        self.cf.write_file(self.config)
         asyncio.create_task(self.led.blink(self.config['vol']))
 
-    async def btn_inc_pressed(self):
+    async def play_btn_pressed(self):
         """ change player volume setting """
-        button = self.btn_inc
+        button = self.buttons['play']
+        while True:
+            await button.press_ev.wait()
+            self.play_track()
+            button.press_ev.clear()
+
+    async def v_btn_pressed(self, btn_, click_action):
+        """ change player volume setting """
+        button = self.buttons[btn_]
         while True:
             await button.press_ev.wait()
             if button.state == 1:
-                self.inc_vol()
-                print(f'Volume set to: {self.vol}')
+                click_action()
             elif button.state == 2:
                 self.save_config()
             button.press_ev.clear()
 
-    async def btn_dec_pressed(self):
+    async def inc_btn_pressed(self):
         """ change player volume setting """
-        button = self.btn_dec
-        while True:
-            await button.press_ev.wait()
-            if button.state == 1:
-                self.dec_vol()
-                print(f'Volume set to: {self.vol}')
-            elif button.state == 2:
-                self.save_config()
-            button.press_ev.clear()
+        asyncio.create_task(self.v_btn_pressed('v_inc', self.inc_vol))
 
-    def poll_vol_buttons(self):
+    async def dec_btn_pressed(self):
+        """ change player volume setting """
+        asyncio.create_task(self.v_btn_pressed('v_dec', self.dec_vol))
+
+    def poll_buttons(self):
         """ start button polling """
         # buttons: self poll
-        asyncio.create_task(self.btn_inc.poll_state())
-        asyncio.create_task(self.btn_dec.poll_state())
-        # inc and dec buttons: poll
-        asyncio.create_task(self.btn_inc_pressed())
-        asyncio.create_task(self.btn_dec_pressed())
-
-
-async def loop():
-    while True:
-        await asyncio.sleep_ms(1000)
+        asyncio.create_task(self.buttons['play'].poll_state())
+        asyncio.create_task(self.buttons['v_inc'].poll_state())
+        asyncio.create_task(self.buttons['v_dec'].poll_state())
+        # buttons: respond to press
+        asyncio.create_task(self.play_btn_pressed())
+        asyncio.create_task(self.inc_btn_pressed())
+        asyncio.create_task(self.dec_btn_pressed())
 
 
 async def main():
-    
     """ test button input """
-    print('In main()')    
-    cf = ConfigFile('config.json')
-    vol_buttons = VolButtons(20, 21, cf)
-    vol_buttons.poll_vol_buttons()
+
+    async def loop():
+        while True:
+            await asyncio.sleep_ms(1000)
+
+    print('In main()')
+    # play, v_dec, v_inc, config_file
+    buttons = DfpButtons(20, 21, 22, ConfigFile('config.json'))
+    buttons.poll_buttons()
     await loop()
 
 if __name__ == '__main__':
