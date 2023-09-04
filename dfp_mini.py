@@ -196,6 +196,8 @@ class CommandHandler:
         """ coro: set volume level 0-30 """
         if level > 30:
             level = 30
+        elif level < 0:
+            level = 30
         await self._send_command(0x06, level)
         self.vol = level
 

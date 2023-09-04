@@ -1,8 +1,8 @@
-# audio_player.py
+# dfp_player.py
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
-from audio_player import DfPlayer
+from dfp_player import DfPlayer
 from dfp_support import Led, DfpButtons
 
 
@@ -56,16 +56,13 @@ async def main():
             elif cmd == 'rpt':
                 # to stop: set repeat_flag False
                 asyncio.create_task(player.repeat_tracks(params[0], params[1]))
+    
+    async def loop():
+        """"""
+        while True:
+            # await buttons.inc_vol()
+            await asyncio.sleep_ms(1000)
 
-    async def startup(player_):
-        """ player startup sequence """
-        print('Starting...')
-        await player_.reset()
-        await player_.set_vol(4)
-        await player_.qry_vol()
-        print(f'Player eq options: {player_.eq_options}')
-        await player_.set_eq('bass')
-        await player.qry_eq()
 
     onboard = Led('LED')
     asyncio.create_task(onboard.blink(10))
@@ -73,8 +70,18 @@ async def main():
     await asyncio.sleep_ms(2000)
 
     player = DfPlayer()
-    await startup(player)
-    await player.repeat_tracks(1, player.track_count)
+    buttons = DfpButtons(20, 21, 22)
+    buttons.next_track = player.next_track
+    buttons.dec_vol = player.dec_vol
+    buttons.inc_vol = player.inc_vol
+    buttons.poll_buttons()
+    await player.startup()
+    await player.qry_vol()
+    # asyncio.create_task(player.repeat_tracks(1, player.track_count))
+    await buttons.next_track()
+    await buttons.next_track()
+    await buttons.next_track()
+    await loop()
 
 
 
