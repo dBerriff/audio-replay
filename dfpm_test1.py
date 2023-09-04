@@ -78,9 +78,8 @@ async def main():
     await player.startup()
     await player.qry_vol()
     # asyncio.create_task(player.repeat_tracks(1, player.track_count))
-    await buttons.next_track()
-    await buttons.next_track()
-    await buttons.next_track()
+    await player.next_track()
+    await player.next_track()
     await loop()
 
 

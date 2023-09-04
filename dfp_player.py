@@ -4,11 +4,11 @@
 import uasyncio as asyncio
 from random import randint
 from dfp_mini import CommandHandler
-from dfp_support import DfpButtons
+from dfp_support import Led, ConfigFile
 
 
 def shuffle(tracks):
-    """ return a shuffled tuple (or list)
+    """ return a shuffled list
         - Durstenfeld / Fisher-Yates shuffle algorithm """
     n = len(tracks)
     if n < 2:
@@ -32,17 +32,18 @@ class DfPlayer:
 
     def __init__(self):
         self.cmd_h = CommandHandler()
+        self.led = Led('LED')
+        self.cf = ConfigFile('config.json')
+        self.config = {}
         self.track_min = 1
         self.track_count = 0
         self.track = 0
+        self.play_list = []
         self.repeat_flag = False
         self.volume = 5
         self.eq_options = self.cmd_h.eq_options
         self.track_end = self.cmd_h.track_end_ev
         self.track_end.set()
-        # tasks to receive and process response words
-        asyncio.create_task(self.cmd_h.stream_tr.receiver())
-        asyncio.create_task(self.cmd_h.consume_rx_data())
 
     # config methods
     
@@ -53,8 +54,8 @@ class DfPlayer:
         else:
             self.config = {'vol': 5}
             self.save_config()
-        self.vol = self.config['vol']
-        print(f'Volume: {self.vol}')
+        self.volume = self.config['vol']
+        print(f'Volume: {self.volume}')
 
     def save_config(self):
         """ save volume setting """
@@ -70,7 +71,7 @@ class DfPlayer:
         await self.qry_vol()
         await self.set_eq('bass')
         await self.qry_eq()
-
+                           
     # player methods
 
     async def reset(self):
@@ -115,12 +116,14 @@ class DfPlayer:
         if self.volume > self.VOL_MIN:
             self.volume -= 1
             await self.set_ch_vol()
+            print(f'Volume: {self.volume}')
 
     async def inc_vol(self):
         """ increase volume by 1 unit """
         if self.volume < self.VOL_MAX:
             self.volume += 1
             await self.set_ch_vol()
+            print(f'Volume: {self.volume}')
 
     async def set_eq(self, setting):
         """ coro: set eq to preset """

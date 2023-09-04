@@ -155,7 +155,8 @@ class DfpButtons:
             if button_.state == 1:
                 await self.inc_vol()
             elif button_.state == 2:
-                await self.save_config()
+                # await self.save_config()
+                pass
             button_.press_ev.clear()
 
     async def dec_btn_pressed(self):
@@ -168,7 +169,8 @@ class DfpButtons:
             if button_.state == 1:
                 await self.dec_vol()
             elif button_.state == 2:
-                await self.save_config()
+                # await self.save_config()
+                pass
             button_.press_ev.clear()
 
 

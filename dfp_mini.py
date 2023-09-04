@@ -15,6 +15,8 @@ import hex_fns as hex_f
 class CommandHandler:
     """ formats, sends and receives command and query messages
         - N.B. 'reset' must be called to initialise object
+        - tx messages are directly sent
+        - rx messages are received through rx_queue
     """
 
     BA_SIZE = const(10)  # bytearray
@@ -87,10 +89,12 @@ class CommandHandler:
         self.playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
         self.error_ev = asyncio.Event()  # not currently monitored
-
         # pre-load template fixed values
         for key in self.data_template:
             self.tx_word[key] = self.data_template[key]
+        # tasks to receive and process response words        
+        asyncio.create_task(self.stream_tr.receiver())
+        asyncio.create_task(self.consume_rx_data())
 
     def get_checksum(self, word_):
         """ 2's complement checksum of bytes 1 to 6 """
