@@ -59,6 +59,7 @@ class DfPlayer:
     async def reset(self):
         """ coro: reset the DFPlayer """
         rx_cmd, rx_param = await self.cmd_h.reset()
+        return rx_cmd, rx_param
 
     async def play_track(self, track):
         """ coro: play track n - allows pause """
@@ -107,7 +108,8 @@ class DfPlayer:
     async def qry_vol(self):
         """ coro: query volume level """
         await self.cmd_h.qry_vol()
-        print(f'Volume: {self.cmd_h.vol // self.config['vol_factor']} (0-10)')
+        volume = self.cmd_h.vol // self.config['vol_factor']
+        print(f'Volume: {volume} (0-10)')
 
     async def qry_eq(self):
         """ coro: query volume level """
