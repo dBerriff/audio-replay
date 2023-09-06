@@ -2,145 +2,117 @@
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
-from random import randint
-from dfp_mini import CommandHandler
-from dfp_support import Led, ConfigFile
-
-
-def shuffle(tracks):
-    """ return a shuffled list
-        - Durstenfeld / Fisher-Yates shuffle algorithm """
-    n = len(tracks)
-    if n < 2:
-        return tracks
-    limit = n - 1
-    for i in range(limit):  # exclusive range
-        j = randint(i, limit)  # inclusive range
-        tracks[i], tracks[j] = tracks[j], tracks[i]
-    return tracks
+from dfp_support import Led, ConfigFile, shuffle
 
 
 class DfPlayer:
     """ implement high-level control of audio track player
         - tracks are referenced by number counting from 1
         - volume is set in range 0 - 10 and scaled
+        - print() statements are minimised except for qry methods;
+          add to calling script if required
     """
-    
-    VOL_FACTOR = const(3)  # for physical player
+
     VOL_MAX = 10
     VOL_MIN = 0
 
-    def __init__(self):
-        self.cmd_h = CommandHandler()
-        self.led = Led('LED')
-        self.cf = ConfigFile('config.json')
+    def __init__(self, command_h_):
+        self.cmd_h = command_h_
+        self.eq_settings = list(self.cmd_h.eq_val.keys())
+        self.config_file = ConfigFile('config.json')
         self.config = {}
+        self.init_config()
         self.track_min = 1
         self.track_count = 0
         self.track = 0
         self.play_list = []
         self.repeat_flag = False
-        self.volume = 5
-        self.eq_options = self.cmd_h.eq_options
         self.track_end = self.cmd_h.track_end_ev
         self.track_end.set()
+        self.led = Led('LED')
 
     # config methods
     
     def init_config(self):
         """ initialise config from file or set to defaults """
-        if self.cf.is_file():
-            self.config = self.cf.read_file()
+        if self.config_file.is_file():
+            self.config = self.config_file.read_file()
         else:
-            self.config = {'vol': 5}
-            self.save_config()
-        self.volume = self.config['vol']
-        print(f'Volume: {self.volume}')
+            self.config = self.cmd_h.config
+            self.config_file.write_file(self.config)
 
     def save_config(self):
-        """ save volume setting """
-        print('Save config')
-        self.cf.write_file(self.config)
+        """ save config settings """
+        self.config_file.write_file(self.config)
         asyncio.create_task(self.led.blink(self.config['vol']))
 
     async def startup(self):
         """ player startup sequence """
-        print('Starting...')
         await self.reset()
-        await self.set_vol(self.volume)
-        await self.qry_vol()
-        await self.set_eq('bass')
-        await self.qry_eq()
+        await self.set_vol(self.config['vol'])
+        await self.set_eq(self.config['eq'])
+        await self.cmd_h.qry_sd_files()
+        self.track_count = self.cmd_h.track_count
                            
     # player methods
 
     async def reset(self):
         """ coro: reset the DFPlayer """
         rx_cmd, rx_param = await self.cmd_h.reset()
-        print(f'Reset return: cmd: {rx_cmd:0x}, param: {rx_param}')
-        await self.cmd_h.qry_sd_files()
-        self.track_count = self.cmd_h.track_count
-        print(f'Number of SD tracks: {self.track_count}')
 
     async def play_track(self, track):
-        """ coro: play track n
-            - does not wait for track_end: allows pause
-        """
+        """ coro: play track n - allows pause """
         if self.track_min <= track <= self.track_count:
             self.track = track
-            print(f'Track: {track}')
             await self.cmd_h.play_track(track)
 
     async def play(self):
         """ coro: play or resume current track """
-        print('Play')
         await self.cmd_h.play()
 
     async def pause(self):
         """ coro: pause playing current track """
-        print('Pause')
         await self.cmd_h.pause()
     
     async def set_ch_vol(self):
         """ set command handler volume """
-        await self.cmd_h.set_vol(self.volume * self.VOL_FACTOR)
+        await self.cmd_h.set_vol(self.config['vol'] * self.config['vol_factor'])
 
     async def set_vol(self, level):
         """ coro: set volume level 0-10 """
         if self.VOL_MIN <= level <= self.VOL_MAX:
-            self.volume = level
+            self.config['vol'] = level
             await self.set_ch_vol()
     
     async def dec_vol(self):
         """ increase volume by 1 unit """
-        if self.volume > self.VOL_MIN:
-            self.volume -= 1
+        if self.config['vol'] > self.VOL_MIN:
+            self.config['vol'] -= 1
             await self.set_ch_vol()
-            print(f'Volume: {self.volume}')
 
     async def inc_vol(self):
         """ increase volume by 1 unit """
-        if self.volume < self.VOL_MAX:
-            self.volume += 1
+        if self.config['vol'] < self.VOL_MAX:
+            self.config['vol'] += 1
             await self.set_ch_vol()
-            print(f'Volume: {self.volume}')
 
     async def set_eq(self, setting):
         """ coro: set eq to preset """
-        print(f'Set eq: {setting}')
-        await self.cmd_h.set_eq(setting)
+        if setting in self.eq_settings:
+            self.config['eq'] = setting
+            await self.cmd_h.set_eq(self.config['eq'])
 
     # query methods
 
     async def qry_vol(self):
         """ coro: query volume level """
         await self.cmd_h.qry_vol()
-        print(f'DFPlayer volume: {self.cmd_h.vol // self.VOL_FACTOR} (0-10)')
+        print(f'Volume: {self.cmd_h.vol // self.config['vol_factor']} (0-10)')
 
     async def qry_eq(self):
         """ coro: query volume level """
         await self.cmd_h.qry_eq()
-        print(f'DFPlayer eq: {self.cmd_h.eq}')
+        print(f'Eq: {self.cmd_h.eq}')
 
     async def qry_sd_files(self):
         """ coro: query number of SD files (in root?) """

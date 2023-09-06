@@ -2,8 +2,11 @@
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
+from data_link import DataLink
+from dfp_mini import CommandHandler
 from dfp_player import DfPlayer
 from dfp_support import Led, DfpButtons
+from queue import Buffer, Queue
 
 
 async def main():
@@ -19,20 +22,22 @@ async def main():
         """ control DFP from simple text commands
             - format is: "cmd parameter" or "cmd, parameter"
             - work-in-progress! """
+        single_space = ' '
+        double_space = '  '
 
         for line in commands_:
             line = line.strip()  # trim
             if line == '':  # skip empty line
                 continue
-            if line[0] == '#':  # print comment line then skip
+            if line.startswith('#'):  # print comment line then skip
                 print(line)
                 continue
             # remove commas; remove extra spaces
-            line = line.replace(',', ' ')
-            while '  ' in line:
-                line = line.replace('  ', ' ')
+            line = line.replace(',', single_space)
+            while double_space in line:
+                line = line.replace(double_space, single_space)
 
-            tokens = line.split(' ')
+            tokens = line.split(single_space)
             cmd = tokens[0]
             params = [int(p) for p in tokens[1:]]
             print(f'{cmd} {params}')
@@ -49,7 +54,7 @@ async def main():
             elif cmd == 'rst':
                 await player.reset()
             elif cmd == 'vol':
-                await player.vol_set(params[0])
+                await player.set_vol(params[0])
                 await player.qry_vol()
             elif cmd == 'stp':
                 await player.pause()
@@ -58,31 +63,38 @@ async def main():
                 asyncio.create_task(player.repeat_tracks(params[0], params[1]))
     
     async def loop():
-        """"""
+        """ do nothing loop """
         while True:
-            # await buttons.inc_vol()
             await asyncio.sleep_ms(1000)
-
 
     onboard = Led('LED')
     asyncio.create_task(onboard.blink(10))
     # allow for player power-up
     await asyncio.sleep_ms(2000)
 
-    player = DfPlayer()
+    # instantiate rx queue and app layers
+    rx_queue = Buffer()
+    data_link = DataLink(0, 1, 9600, 10, rx_queue)
+    cmd_handler = CommandHandler(data_link)
+    player = DfPlayer(cmd_handler)
+    # link button action methods
     buttons = DfpButtons(20, 21, 22)
     buttons.next_track = player.next_track
     buttons.dec_vol = player.dec_vol
     buttons.inc_vol = player.inc_vol
+    # start button-polling tasks
     buttons.poll_buttons()
+
     await player.startup()
+    print(f'{player.config['name']}: configuration file loaded')
+    print(f'Number of SD tracks: {player.track_count}')
     await player.qry_vol()
-    # asyncio.create_task(player.repeat_tracks(1, player.track_count))
-    await player.next_track()
-    await player.next_track()
-    await loop()
+    await player.qry_eq()
 
-
+    commands = get_command_lines('test.txt')
+    await run_commands(commands)
+    # await player.next_track()
+    # await player.next_track()
 
 if __name__ == '__main__':
     try:

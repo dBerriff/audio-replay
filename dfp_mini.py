@@ -1,14 +1,11 @@
 # dfp_mini.py
 """
-DFPlayer Mini (DFP): device specific code
-See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for documentation.
-Some DFP commands not supported or buggy - code alternatives implemented.
-- this version is for SD-cards only
-- no folder-related commands
+    DFPlayer Mini (DFP): device specific code
+    See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for documentation.
+    Some DFP commands not supported or buggy - code alternatives implemented.
 """
 
 import uasyncio as asyncio
-from data_link import DataLink
 import hex_fns as hex_f
 
 
@@ -19,6 +16,10 @@ class CommandHandler:
         - rx messages are received through rx_queue
     """
 
+    config = {'name': 'DFPlayer Mini',
+              'vol_factor': 3,
+              'vol': 5,
+              'eq': 'normal'}
     BA_SIZE = const(10)  # bytearray
     # data-byte indices
     CMD = const(3)
@@ -26,74 +27,36 @@ class CommandHandler:
     P_L = const(6)
     C_M = const(7)  # checksum
     C_L = const(8)
-    R_FB = const(1)  # require ACK feedback
-    # fixed bytearray elements by index
-    data_template = {0: 0x7E, 1: 0xFF, 2: 0x06, 4: R_FB, 9: 0xEF}
-
+    R_ACK = const(0x01)  # require ACK feedback
     VOL_MAX = const(30)
     VOL_MIN = const(0)
-
     Q_LEN = const(8)
-    
-    # command dictionary
-    hex_str = {
-        # commands
-        0x03: 'track',  # 1-3000
-        0x06: 'vol_set',  # 0-30
-        0x07: 'eq_set',
-        0x0c: 'reset',
-        0x0d: 'play',
-        0x0e: 'pause',
-        # information return
-        0x3a: 'media_insert',
-        0x3b: 'media_remove',
-        0x3d: 'track_fin',  # sd track finished
-        0x3f: 'qry_init',  # returns: 02 for TF-card
-        0x40: 'error',
-        0x41: 'ack',
-        # query status
-        0x42: 'qry_status',  # 0: stopped; 1: playing; 2: paused
-        0x43: 'qry_vol',
-        0x44: 'qry_eq',
-        0x48: 'qry_sd_files',  # number of files, in root directory
-        0x4c: 'qry_tf_trk'
-        }
+    # bytearray template
+    ba_template = [0x7E, 0xFF, 0x06, 0x00, R_ACK, 0x00, 0x00, 0x00, 0x00, 0xEF]
 
-    # inverse dictionary mapping
-    str_hex = {value: key for key, value in hex_str.items()}
-    # eq dicts, and values as string
+    
+    # setting dictionaries
     eq_val = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
     val_eq = {value: key for key, value in eq_val.items()}
-    eq_options = ''
-    for key in eq_val:
-        eq_options += f'{key}, '
-    eq_options = eq_options[:-2]
 
-    def __init__(self):
-        self.data_link = DataLink(0, 1, 10)
-        self.stream_tr = self.data_link.stream_tr
+    def __init__(self, data_link_):
+        self.data_link = data_link_
+        self.stream_tx_rx = self.data_link.stream_tx_rx
         self.sender = self.data_link.sender
-        self.tx_word = bytearray(self.BA_SIZE)
+        self.tx_word = bytearray(self.ba_template)
+        self.rx_word = bytearray(self.ba_template)
         self.rx_queue = self.data_link.rx_queue
-        self.rx_word = bytearray(self.BA_SIZE)
         self.rx_param = 0x0000
         self.rx_cmd = 0x00
-
-        self.vol = 0
-        self.vol_min = 0
-        self.vol_max = 30
+        self.vol = self.VOL_MIN
         self.eq = 'normal'
         self.track_count = 0
         self.track = 0
+
         self.ack_ev = asyncio.Event()
-        self.playing_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
         self.error_ev = asyncio.Event()  # not currently monitored
-        # pre-load template fixed values
-        for key in self.data_template:
-            self.tx_word[key] = self.data_template[key]
-        # tasks to receive and process response words        
-        asyncio.create_task(self.stream_tr.receiver())
+        asyncio.create_task(self.stream_tx_rx.receiver())
         asyncio.create_task(self.consume_rx_data())
 
     def get_checksum(self, word_):
@@ -111,37 +74,29 @@ class CommandHandler:
         """ coro: load tx bytearray word and send
             - call from player-specific methods
         """
-        self.ack_ev.clear()  # require ACK
+        if self.R_ACK:
+            self.ack_ev.clear()
         self.tx_word[self.CMD] = cmd
-        # slice and load (msb, lsb) for parameter
-        self.tx_word[self.P_M], self.tx_word[self.P_L] = \
-            hex_f.slice_reg16(param)
-        # slice and load (msb, lsb) for checksum
-        self.tx_word[self.C_M], self.tx_word[self.C_L] = \
-            hex_f.slice_reg16(self.get_checksum(self.tx_word))
+        self.tx_word[self.P_M], self.tx_word[self.P_L] = hex_f.slice_reg16(param)
+        self.tx_word[self.C_M], self.tx_word[self.C_L] = hex_f.slice_reg16(self.get_checksum(self.tx_word))
         await self.sender(self.tx_word)
-        # require ACK (set in parse_rx_message() )
-        await self.ack_ev.wait()
+        if self.R_ACK:
+            await self.ack_ev.wait()
 
     def parse_rx_message(self, message):
-        """ parse incoming message_ parameters,
-            set any dependent attributes
-        """
-        self.rx_cmd = message[self.CMD]
+        """ parse and act on incoming message parameters """
         if self.check_checksum(message):
-            print(f'{self.rx_cmd}: error in checksum')
+            print(f'{message}: error in checksum')
             return
-        self.rx_param = hex_f.m_l_reg16(
-            message[self.P_M], message[self.P_L])
+        self.rx_cmd = message[self.CMD]
+        self.rx_param = hex_f.m_l_reg16(message[self.P_M], message[self.P_L])
         rx_cmd = self.rx_cmd
         rx_param = self.rx_param
-
         # check for specific messages that require action
         if rx_cmd == 0x41:  # ack
             self.ack_ev.set()
         elif rx_cmd == 0x3d:  # tf track finished
             self.track_end_ev.set()
-            self.playing_ev.clear()
         elif rx_cmd == 0x3f:  # q_init
             if (rx_param & 0x0002) != 0x0002:
                 raise Exception('DFPlayer error: no TF-card?')
@@ -184,12 +139,11 @@ class CommandHandler:
     async def play_track(self, track):
         """ coro: play track n """
         self.track_end_ev.clear()
-        self.playing_ev.set()
         await self._send_command(0x03, track)
         self.track = track
 
     async def play(self):
-        """ coro: stop playing """
+        """ coro: start playing """
         await self._send_command(0x0d, 0)
 
     async def pause(self):
@@ -197,17 +151,17 @@ class CommandHandler:
         await self._send_command(0x0e, 0)
 
     async def set_vol(self, level):
-        """ coro: set volume level 0-30 """
-        if level > 30:
-            level = 30
+        """ coro: set volume level 0-VOL_MAX """
+        if level > self.VOL_MAX:
+            level = self.VOL_MAX
         elif level < 0:
-            level = 30
+            level = self.VOL_MIN
         await self._send_command(0x06, level)
         self.vol = level
 
     async def set_eq(self, setting):
         """ set eq to preset setting
-            - setting: 'normal', 'pop', 'rock', 'jazz', 'classic', 'bass'
+            - settings: 'normal', 'pop', 'rock', 'jazz', 'classic', 'bass'
         """
         if setting in self.eq_val:
             await self._send_command(0x07, self.eq_val[setting])
@@ -219,11 +173,11 @@ class CommandHandler:
         await self._send_command(0x43)
 
     async def qry_eq(self):
-        """ coro: query volume level """
+        """ coro: query eq setting """
         await self._send_command(0x44)
 
     async def qry_sd_files(self):
-        """ coro: query number of TF/SD files (in root?) """
+        """ coro: query number of SD files (in root - folders not used) """
         await self._send_command(0x48)
 
     async def qry_sd_track(self):
@@ -234,12 +188,17 @@ class CommandHandler:
         """ adjust volume up or down - must be run as task """
         await self.set_vol(self.vol + delta)
         await self.qry_vol()
-        await asyncio.sleep_ms(1000)
 
 
 async def main():
     """"""
-    pass
+    from data_link import DataLink
+    from queue import Buffer
+
+    rx_queue = Buffer()
+    data_link = DataLink(0, 1, 9600, 10, rx_queue)
+    cmd_handler = CommandHandler(data_link)
+    print(cmd_handler)
 
 if __name__ == '__main__':
     try:

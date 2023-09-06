@@ -6,6 +6,7 @@
 import uasyncio as asyncio
 from machine import Pin
 from micropython import const
+from random import randint
 import json
 import os
 from time import ticks_ms, ticks_diff
@@ -174,35 +175,22 @@ class DfpButtons:
             button_.press_ev.clear()
 
 
+def shuffle(list_):
+    """ return a shuffled list
+        - Durstenfeld / Fisher-Yates shuffle algorithm """
+    n = len(list_)
+    if n < 2:
+        return list_
+    limit = n - 1
+    for i in range(limit):  # exclusive range
+        j = randint(i, limit)  # inclusive range
+        list_[i], list_[j] = list_[j], list_[i]
+    return list_
+
+
 async def main():
-    """ test button input """
-
-    async def loop():
-        while True:
-            await asyncio.sleep_ms(1000)
-    
-    async def dummy_next():
-        print('next-track button clicked')
-
-    async def dummy_dec():
-        print('dec button clicked')
-
-    async def dummy_inc():
-        print('inc button clicked')
-
-    async def dummy_save_config():
-        print('save config')
-
-    print('In main()')
-    # play, v_dec, v_inc, config_file
-    buttons = DfpButtons(20, 21, 22)
-    # assign methods to buttons
-    buttons.next_track = dummy_next
-    buttons.dec_vol = dummy_dec
-    buttons.inc_vol = dummy_inc
-    buttons.save_config = dummy_save_config
-    buttons.poll_buttons()
-    await loop()
+    """ test code, if any """
+    pass
 
 if __name__ == '__main__':
     try:

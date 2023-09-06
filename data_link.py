@@ -15,61 +15,6 @@ import uasyncio as asyncio
 from machine import Pin, UART
 
 
-class Queue:
-    """ simple FIFO list as queue
-        - is_data and is_space Events control access
-        - "events should be set within tasks" so coros for put and get.
-    """
-
-    def __init__(self, q_item, max_q_len):
-        self.max_len = max_q_len
-        self.queue = [q_item] * max_q_len
-        self.head = 0
-        self.next = 0
-        self.is_data = asyncio.Event()
-        self.is_space = asyncio.Event()
-        self.put_lock = asyncio.Lock()
-        self.is_space.set()
-
-    async def put(self, item):
-        """ coro: add item to the queue - multiple producers """
-        async with self.put_lock:
-            await self.is_space.wait()
-            self.queue[self.next] = item
-            self.next = (self.next + 1) % self.max_len
-            if self.next == self.head:
-                self.is_space.clear()
-            self.is_data.set()
-
-    async def get(self):
-        """ coro: remove item from the queue - single consumer """
-        await self.is_data.wait()
-        item = self.queue[self.head]
-        self.head = (self.head + 1) % self.max_len
-        if self.head == self.next:
-            self.is_data.clear()
-        self.is_space.set()
-        return item
-
-    @property
-    def q_len(self):
-        """ number of items in the queue: for testing """
-        if self.head == self.next:
-            n = self.max_len if self.is_data.is_set() else 0
-        else:
-            n = (self.next - self.head) % self.max_len
-        return n
-
-    def q_dump(self):
-        """ print out queue pointers and all item values: for testing """
-        print(f'head: {self.head}; next: {self.next}')
-        q_str = '['
-        for i in range(self.max_len):
-            q_str += f'{self.queue[i]}, '
-        q_str = q_str[:-2] + ']'
-        print(q_str)
-
-
 class StreamTR:
     """ implement UART Tx and Rx as stream_tr """
 
@@ -89,18 +34,16 @@ class StreamTR:
     async def receiver(self):
         """ coro: read data stream item into buffer """
         while True:
-            res = await self.s_reader.readinto(self.in_buf)
-            if res == self.buf_size:
-                await self.rx_queue.put(bytearray(self.in_buf))
+            await self.s_reader.readinto(self.in_buf)
+            await self.rx_queue.put(bytearray(self.in_buf))
 
 
 class DataLink:
     """ implement data link between player app and device """
 
-    def __init__(self, pin_tx, pin_rx, ba_size, q_len=8):
-        uart = UART(0, 9600)  # fixed baud rate for DFP mini
+    def __init__(self, pin_tx, pin_rx, baudrate, ba_size, rx_queue):
+        uart = UART(0, baudrate)
         uart.init(tx=Pin(pin_tx), rx=Pin(pin_rx))
-        q_item = bytearray(ba_size)
-        self.rx_queue = Queue(q_item, q_len)
-        self.stream_tr = StreamTR(uart, ba_size, self.rx_queue)
-        self.sender = self.stream_tr.sender
+        self.rx_queue = rx_queue
+        self.stream_tx_rx = StreamTR(uart, ba_size, self.rx_queue)
+        self.sender = self.stream_tx_rx.sender
