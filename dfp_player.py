@@ -22,16 +22,19 @@ class DfPlayer:
         self.config_file = ConfigFile('config.json')
         self.config = {}
         self.init_config()
-        self.track_min = 1
         self.track_count = 0
-        self.track = 0
-        self.play_list = []
+        self.track_min = 1
+        self._track_index = 1
         self.repeat_flag = False
-        self.track_end = self.cmd_h.track_end_ev
-        self.track_end.set()
+        self.track_end_ev = self.cmd_h.track_end_ev
+        self.track_end_ev.set()
         self.led = Led('LED')
 
     # config methods
+    
+    @property
+    def track_number(self):
+        return self._track_index
     
     def init_config(self):
         """ initialise config from file or set to defaults """
@@ -48,27 +51,27 @@ class DfPlayer:
 
     async def startup(self):
         """ player startup sequence """
-        await self.reset()
+        response = await self.reset()
         await self.set_vol(self.config['vol'])
         await self.set_eq(self.config['eq'])
         await self.cmd_h.qry_sd_files()
         self.track_count = self.cmd_h.track_count
-                           
+        return response
+
     # player methods
 
     async def reset(self):
         """ coro: reset the DFPlayer """
-        rx_cmd, rx_param = await self.cmd_h.reset()
-        return rx_cmd, rx_param
+        return await self.cmd_h.reset()
 
     async def play_track(self, track):
         """ coro: play track n - allows pause """
         if self.track_min <= track <= self.track_count:
-            self.track = track
+            self._track_index = track
             await self.cmd_h.play_track(track)
 
     async def play(self):
-        """ coro: play or resume current track """
+        """ coro: play or resume (after pause) current track """
         await self.cmd_h.play()
 
     async def pause(self):
@@ -107,78 +110,105 @@ class DfPlayer:
 
     async def qry_vol(self):
         """ coro: query volume level """
-        await self.cmd_h.qry_vol()
-        volume = self.cmd_h.vol // self.config['vol_factor']
-        print(f'Volume: {volume} (0-10)')
+        ch_vol = await self.cmd_h.qry_vol()
+        self.config['vol'] = ch_vol // self.config['vol_factor']
+        print(f"Volume: {self.config['vol']}")
 
     async def qry_eq(self):
         """ coro: query volume level """
-        await self.cmd_h.qry_eq()
-        print(f'Eq: {self.cmd_h.eq}')
+        eq = await self.cmd_h.qry_eq()
+        self.config['eq'] = eq
+        print(f"Eq: {self.config['eq']}")
 
     async def qry_sd_files(self):
         """ coro: query number of SD files (in root?) """
-        await self.cmd_h.qry_sd_files()
-        print(f'Number of SD-card files: {self.cmd_h.track_count}')
+        tc = await self.cmd_h.qry_sd_files()
+        self.track_count = tc
+        print(f'Number of SD-card files: {self.track_count}')
 
     async def qry_sd_track(self):
         """ coro: query current track number """
-        await self.cmd_h.qry_sd_track()
-        print(f'Current track: {self.cmd_h.track}')
+        trk = await self.cmd_h.qry_sd_track()
+        self._track_index = trk
+        print(f'Current track: {self._track_index}')
 
     # additional play methods
 
+    async def play_track_next(self, track):
+        """ coro: play track in sequence """
+        await self.track_end_ev.wait()
+        await self.play_track(track)
+
+    async def play_trk_list(self, list_):
+        """ coro: play sequence of tracks by number """
+        for track_ in list_:
+            await self.play_track_next(track_)
+
     async def next_track(self):
         """ coro: play next track """
-        self.track += 1
-        if self.track > self.track_count:
-            self.track = self.track_min
-        await self.play_track_seq(self.track)
+        self._track_index += 1
+        if self._track_index > self.track_count:
+            self._track_index = self.track_min
+        await self.play_track_next(self._track_index)
 
     async def prev_track(self):
         """ coro: play previous track """
-        self.track -= 1
-        if self.track < self.track_min:
-            self.track = self.track_count
-        await self.play_track_seq(self.track)
+        self._track_index -= 1
+        if self._track_index < self.track_min:
+            self._track_index = self.track_count
+        await self.play_track_next(self._track_index)
+
+
+class PlPlayer(DfPlayer):
+    """ play tracks in a playlist
+        - playlist interface: index tracks from 1 to match DFPlayer
+    """
     
-    async def play_track_seq(self, track):
-        """ coro: play track n
-            - waits for previous track_end
+    START_TRACK = const(1)
+
+    def __init__(self, command_h_):
+        super().__init__(command_h_)
+        self._playlist = []
+        self._pl_track_index = self.START_TRACK
+    
+    @property
+    def playlist(self):
+        return self._playlist
+
+    def build_playlist(self, shuffled=False):
+        """ shuffle playlist track sequence """
+        self._playlist = [i + 1 for i in range(self.track_count)]
+        if shuffled:
+            self._playlist = shuffle(self._playlist)
+        self._playlist.insert(0, 0)
+
+    async def play_pl_track(self, track_index_):
+        """ play current playlist track
+            - offset by -1 to match list index
         """
-        await self.track_end.wait()
-        await self.play_track(track)
+        await self.track_end_ev.wait()
+        self._pl_track_index = track_index_
+        await self.play_track(self._playlist[track_index_])
 
-    async def track_sequence(self, sequence):
-        """ coro: play sequence of tracks by number """
-        for track_ in sequence:
-            await self.play_track_seq(track_)
+    async def next_pl_track(self):
+        """ coro: play next track """
+        self._pl_track_index += 1
+        if self._pl_track_index > self.track_count:
+            self._pl_track_index = self.START_TRACK
+        await self.play_pl_track(self._pl_track_index)
 
-    async def repeat_tracks(self, start, end):
-        """ coro: play a range of tracks from start to end inclusive
-            then repeat
-            - run as a task: non-blocking so repeat_flag can be set
-            - should be the final command in a script list
-            - to enable: must set repeat_flag True
-            - to stop: set repeat_flag False
-        """
-        self.repeat_flag = True
-        inc = -1 if end < start else 1
-        rewind = end + inc
-        trk_counter = start
-        while self.repeat_flag:
-            await self.play_track_seq(trk_counter)
-            trk_counter += inc
-            if trk_counter == rewind:  # end of list
-                trk_counter = start
+    async def prev_pl_track(self):
+        """ coro: play previous track """
+        self._pl_track_index -= 1
+        if self._pl_track_index < self.START_TRACK:
+            self._pl_track_index = self.track_count
+        await self.play_pl_track(self._pl_track_index)
 
-    def play_all(self, do_shuffle=True):
-        """ play all tracks on repeat, optionally shuffled """
-        sequence = list(range(self.track_min, self.track_count + 1))
-        if do_shuffle:
-            sequence = shuffle(sequence)
-        self.repeat_flag = True
-        self.track_sequence(sequence)
+    async def play_playlist(self):
+        """ play playlist """
+        await self.play_pl_track(self.START_TRACK)
+        while True:
+            await self.next_pl_track()
 
 
 async def main():

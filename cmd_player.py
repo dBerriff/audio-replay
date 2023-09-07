@@ -5,8 +5,8 @@ import uasyncio as asyncio
 from data_link import DataLink
 from dfp_mini import CommandHandler
 from dfp_player import DfPlayer
-from dfp_support import Led, DfpButtons
-from queue import Buffer, Queue
+from dfp_support import Led
+from queue import Buffer
 
 
 async def main():
@@ -22,79 +22,75 @@ async def main():
         """ control DFP from simple text commands
             - format is: "cmd parameter" or "cmd, parameter"
             - work-in-progress! """
-        single_space = ' '
-        double_space = '  '
 
         for line in commands_:
             line = line.strip()  # trim
             if line == '':  # skip empty line
                 continue
-            if line.startswith('#'):  # print comment line then skip
+            if line[0] == '#':  # print comment line then skip
                 print(line)
                 continue
             # remove commas; remove extra spaces
-            line = line.replace(',', single_space)
-            while double_space in line:
-                line = line.replace(double_space, single_space)
+            line = line.replace(',', ' ')
+            while '  ' in line:
+                line = line.replace('  ', ' ')
 
-            tokens = line.split(single_space)
-            cmd = tokens[0]
+            tokens = line.split(' ')
+            cmd_ = tokens[0]
             params = [int(p) for p in tokens[1:]]
-            print(f'{cmd} {params}')
+            print(f'{cmd_} {params}')
             # all commands block except 'rpt'
-            if cmd == 'zzz':
+            if cmd_ == 'zzz':
                 await asyncio.sleep(params[0])
-            elif cmd == 'trk':
-                # parameters required as int
-                await player.track_sequence(params)
-            elif cmd == 'nxt':
+            elif cmd_ == 'trk':
+                await player.play_track_next(params[0])
+            elif cmd_ == 'trl':
+                await player.play_trk_list(params)
+            elif cmd_ == 'nxt':
                 await player.next_track()
-            elif cmd == 'prv':
+            elif cmd_ == 'prv':
                 await player.prev_track()
-            elif cmd == 'rst':
+            elif cmd_ == 'rst':
                 await player.reset()
-            elif cmd == 'vol':
+            elif cmd_ == 'vol':
                 await player.set_vol(params[0])
                 await player.qry_vol()
-            elif cmd == 'stp':
+            elif cmd_ == 'stp':
                 await player.pause()
-            elif cmd == 'rpt':
+            elif cmd_ == 'rpt':
                 # to stop: set repeat_flag False
-                asyncio.create_task(player.repeat_tracks(params[0], params[1]))
-    
-    async def loop():
-        """ do nothing loop """
-        while True:
-            await asyncio.sleep_ms(1000)
+                asyncio.create_task(player.play_trk_list(params))
 
     onboard = Led('LED')
     asyncio.create_task(onboard.blink(10))
     # allow for player power-up
-    await asyncio.sleep_ms(2000)
+    await asyncio.sleep_ms(1000)
 
     # instantiate rx queue and app layers
     rx_queue = Buffer()
     data_link = DataLink(0, 1, 9600, 10, rx_queue)
     cmd_handler = CommandHandler(data_link)
     player = DfPlayer(cmd_handler)
-    # link button action methods
-    buttons = DfpButtons(20, 21, 22)
-    buttons.next_track = player.next_track
-    buttons.dec_vol = player.dec_vol
-    buttons.inc_vol = player.inc_vol
-    # start button-polling tasks
-    buttons.poll_buttons()
 
-    await player.startup()
-    print(f'{player.config['name']}: configuration file loaded')
+    cmd, param = await player.startup()
+    print(f'Return from player initialise: cmd: {cmd:0x}, param: {param:0x}')
+    print(f"{player.config['name']}: configuration file loaded")
     print(f'Number of SD tracks: {player.track_count}')
+    print(f'Track number: {player.track_number}')
     await player.qry_vol()
     await player.qry_eq()
+    print('Run commands')
 
     commands = get_command_lines('test.txt')
+    player.repeat_flag = True  # allow repeat 
     await run_commands(commands)
-    # await player.next_track()
-    # await player.next_track()
+    await asyncio.sleep_ms(1000)
+    player.repeat_flag = False
+    await player.track_end_ev.wait()  # blocking must be in this task
+
+    # additional commands can now be run
+    await player.play_track_next(79)
+    await asyncio.sleep_ms(1000)
 
 if __name__ == '__main__':
     try:

@@ -1,9 +1,10 @@
 # test file for DFPlayer Mini, dfp_player.py
-trk 76  9  25
+trk 79
+trl 76  9  25
 zzz 2
-trk 76 75
+trl 76 75
 zzz 2
-trk 1
+trl 1
 nxt
 nxt
 prv

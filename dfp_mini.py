@@ -34,8 +34,7 @@ class CommandHandler:
     # bytearray template
     ba_template = [0x7E, 0xFF, 0x06, 0x00, R_ACK, 0x00, 0x00, 0x00, 0x00, 0xEF]
 
-    
-    # setting dictionaries
+    # settings dictionaries
     eq_val = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
     val_eq = {value: key for key, value in eq_val.items()}
 
@@ -168,21 +167,29 @@ class CommandHandler:
         else:
             await self._send_command(0x07, self.eq_val['normal'])
 
+    # query methods
+
     async def qry_vol(self):
         """ coro: query volume level """
         await self._send_command(0x43)
+        return self.vol
 
     async def qry_eq(self):
         """ coro: query eq setting """
         await self._send_command(0x44)
+        return self.eq
 
     async def qry_sd_files(self):
         """ coro: query number of SD files (in root - folders not used) """
         await self._send_command(0x48)
+        return self.track_count
 
     async def qry_sd_track(self):
         """ coro: query current track number """
         await self._send_command(0x4c)
+        return self.track
+
+    # other methods
 
     async def adjust_volume(self, delta):
         """ adjust volume up or down - must be run as task """
