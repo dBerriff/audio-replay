@@ -2,53 +2,92 @@
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
-from data_link import DataLink
-from dfp_mini import CommandHandler
-from dfp_player import PlPlayer
-from dfp_support import Led, DfpButtons
-from queue import Buffer
+from dfp_player import DfPlayer
+from dfp_support import shuffle, Led
+
+
+class PlPlayer(DfPlayer):
+    """ play tracks in a playlist
+        - playlist interface: index tracks from 1 to match DFPlayer
+    """
+
+    def __init__(self, command_h_):
+        super().__init__(command_h_)
+        self._playlist = []
+        self._pl_track_index = self.START_TRACK
+        self.tx_lock = asyncio.Lock()
+        self.led = Led('LED')
+    
+    @property
+    def playlist(self):
+        return self._playlist
+
+    def save_config(self):
+        """ save config settings """
+        self.config['vol'] = self.vol
+        self.config['eq'] = self.eq
+        self.config_file.write_file(self.config)
+        asyncio.create_task(self.led.blink(self.config['vol']))
+
+    def build_playlist(self, shuffled=False):
+        """ shuffle playlist track sequence """
+        self._playlist = [i + 1 for i in range(self.track_count)]
+        if shuffled:
+            self._playlist = shuffle(self._playlist)
+        self._playlist.insert(0, 0)
+
+    async def play_pl_track(self, track_index_):
+        """ play current playlist track
+            - offset by -1 to match list index
+        """
+        async with self.tx_lock:
+            await self.track_end_ev.wait()
+            self._pl_track_index = track_index_
+            await self.play_track(self._playlist[track_index_])
+
+    async def next_pl_track(self):
+        """ coro: play next track """
+        self._pl_track_index += 1
+        if self._pl_track_index > self.track_count:
+            self._pl_track_index = self.START_TRACK
+        await self.play_pl_track(self._pl_track_index)
+
+    async def prev_pl_track(self):
+        """ coro: play previous track """
+        self._pl_track_index -= 1
+        if self._pl_track_index < self.START_TRACK:
+            self._pl_track_index = self.track_count
+        await self.play_pl_track(self._pl_track_index)
+
+    async def play_playlist(self):
+        """ play playlist """
+        await self.play_pl_track(self.START_TRACK)
+        while True:
+            await self.next_pl_track()
+
+    async def dec_vol(self):
+        """ increase volume by 1 unit """
+        async with self.tx_lock:
+            if self.vol > self.VOL_MIN:
+                self.vol -= 1
+                await self.set_ch_vol()
+                asyncio.create_task(self.led.blink(self.vol))
+
+    async def inc_vol(self):
+        """ increase volume by 1 unit """
+        async with self.tx_lock:
+            if self.vol < self.VOL_MAX:
+                self.vol += 1
+                await self.set_ch_vol()
+                asyncio.create_task(self.led.blink(self.vol))
 
 
 async def main():
     """ test playlist player controller
         - playlist interface indexes tracks from 1
     """
+    print('In main()')
 
-    async def loop():
-        """ do nothing loop """
-        while True:
-            await asyncio.sleep_ms(1000)
-
-    onboard = Led('LED')
-    uart_params = (0, 1, 9600, 10)
-    bytearray_size = 10
-    btn_pins = (20, 21, 22)
-    rx_queue = Buffer()
-    
-    asyncio.create_task(onboard.blink(10))
-    # allow for player power-up
-    await asyncio.sleep_ms(1000)
-
-    # instantiate rx queue and app layers
-    data_link = DataLink(*uart_params, rx_queue)
-    cmd_handler = CommandHandler(data_link)
-    player = PlPlayer(cmd_handler)
-
-    buttons = DfpButtons(*btn_pins)
-    buttons.next_track = player.next_track
-    buttons.dec_vol = player.dec_vol
-    buttons.inc_vol = player.inc_vol
-    buttons.poll_buttons()
-
-    cmd, param = await player.startup()
-    print(f'Return from initialise: cmd: {cmd:0x}, param: {param:0x}')
-    print(f"{player.config['name']}: configuration file loaded")
-    print(f'Number of SD tracks: {player.track_count}')
-    await player.qry_vol()
-    await player.qry_eq()
-
-    player.build_playlist(shuffled=False)
-    await player.play_playlist()
 
 if __name__ == '__main__':
     try:

@@ -76,7 +76,7 @@ async def main():
     print(f'Return from player initialise: cmd: {cmd:0x}, param: {param:0x}')
     print(f"{player.config['name']}: configuration file loaded")
     print(f'Number of SD tracks: {player.track_count}')
-    print(f'Track number: {player.track_number}')
+    print(f'Track number: {player.track}')
     await player.qry_vol()
     await player.qry_eq()
     print('Run commands')
