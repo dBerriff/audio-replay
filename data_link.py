@@ -41,8 +41,8 @@ class StreamTR:
 class DataLink:
     """ implement data link between player app and device """
 
-    def __init__(self, pin_tx, pin_rx, baudrate, ba_size, rx_queue):
-        uart = UART(0, baudrate)
+    def __init__(self, pin_tx, pin_rx, baud_rate, ba_size, rx_queue):
+        uart = UART(0, baud_rate)
         uart.init(tx=Pin(pin_tx), rx=Pin(pin_rx))
         self.rx_queue = rx_queue
         self.stream_tx_rx = StreamTR(uart, ba_size, self.rx_queue)

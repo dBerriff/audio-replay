@@ -1,4 +1,5 @@
 # test file for DFPlayer Mini, dfp_player.py
+vol 6
 trk 79
 trl 76  9  25
 zzz 2

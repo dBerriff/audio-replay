@@ -17,6 +17,8 @@ class DfPlayer:
 
     def __init__(self, command_h_):
         self.cmd_h = command_h_
+        self.rx_cmd = 0x00
+        self.rx_param = 0x0000
         self.vol = 0
         self.vol_factor = 1
         self.eq = 0
@@ -25,22 +27,22 @@ class DfPlayer:
         self.config = {}
         self.init_config()
         self.track_count = 0
-        self._track_index = 1
 
-        # map unmodified methods
-        self.reset = self.cmd_h.reset
+        # map methods
         self.play = self.cmd_h.play
         self.pause = self.cmd_h.pause
         self.track_end_ev = self.cmd_h.track_end_ev
         self.track_end_ev.set()
+        self.send_query = self.cmd_h.send_query
 
+    async def reset(self):
+        """ reset player including track_count """
+        await self.cmd_h.reset()
+        await self.send_query('sd_files')
+        self.track_count = self.cmd_h.track_count
+    
     # config methods
-    
-    @property
-    def track(self):
-        """ set by qry_sd_track() """
-        return self._track_index
-    
+
     def init_config(self):
         """ initialise config from file or set to defaults
             - write config file if it does not exist
@@ -64,71 +66,49 @@ class DfPlayer:
         """ player startup sequence
             - response should be: (0x3f, 0x02)
         """
-        response = await self.reset()
+        await self.reset()
+        await asyncio.sleep_ms(200)
         await self.set_vol(self.config['vol'])
         await self.set_eq(self.config['eq'])
-        await self.qry_sd_files()
-        return response
+        await self.send_query('sd_files')
 
     # player methods
 
     async def play_track(self, track):
         """ coro: play track n - allows pause """
         if self.START_TRACK <= track <= self.track_count:
-            self._track_index = track
             await self.cmd_h.play_track(track)
-
-    async def set_ch_vol(self):
-        """ set command handler volume """
-        await self.cmd_h.set_vol(self.vol * self.vol_factor)
 
     async def set_vol(self, level):
         """ coro: set volume level 0-10 """
         if self.VOL_MIN <= level <= self.VOL_MAX:
-            self.config['vol'] = level
-            await self.set_ch_vol()
+            self.vol = level
+            await self.cmd_h.set_vol(self.vol * self.vol_factor)
     
     async def dec_vol(self):
         """ increase volume by 1 unit """
         if self.vol > self.VOL_MIN:
             self.vol -= 1
-            await self.set_ch_vol()
+            await self.set_vol(self.vol)
 
     async def inc_vol(self):
         """ increase volume by 1 unit """
         if self.vol < self.VOL_MAX:
             self.vol += 1
-            await self.set_ch_vol()
+            await self.set_vol(self.vol)
 
     async def set_eq(self, setting):
         """ coro: set eq to preset """
         if setting in self.eq_settings:
             self.eq = setting
-            await self.cmd_h.set_eq(setting)
+            await self.cmd_h.set_eq(self.eq)
 
-    # query methods
-
-    async def qry_vol(self):
-        """ coro: query volume level """
-        ch_vol = await self.cmd_h.qry_vol()
-        self.vol = ch_vol // self.vol_factor
-        print(f'Volume: {self.vol}')
-
-    async def qry_eq(self):
-        """ coro: query volume level """
-        eq = await self.cmd_h.qry_eq()
-        self.eq = eq
-        print(f'Eq: {self.eq}')
-
-    async def qry_sd_files(self):
-        """ coro: query number of SD files (in root?) """
-        self.track_count = await self.cmd_h.qry_sd_files()
-        print(f'Number of SD-card files: {self.track_count}')
-
-    async def qry_sd_track(self):
-        """ coro: query current track number """
-        self._track_index = await self.cmd_h.qry_sd_track()
-        print(f'Current track: {self.track}')
+    def print_player_settings(self):
+        """ print selected player settings """
+        result = f'track: {self.cmd_h.track}, '
+        result += f'vol: {self.cmd_h.vol // self.vol_factor}, '
+        result += f'eq: {self.cmd_h.eq}'
+        print(result)
 
 
 async def main():

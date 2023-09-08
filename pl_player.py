@@ -15,7 +15,6 @@ class PlPlayer(DfPlayer):
         super().__init__(command_h_)
         self._playlist = []
         self._pl_track_index = self.START_TRACK
-        self.tx_lock = asyncio.Lock()
         self.led = Led('LED')
     
     @property
@@ -40,10 +39,8 @@ class PlPlayer(DfPlayer):
         """ play current playlist track
             - offset by -1 to match list index
         """
-        async with self.tx_lock:
-            await self.track_end_ev.wait()
-            self._pl_track_index = track_index_
-            await self.play_track(self._playlist[track_index_])
+        self._pl_track_index = track_index_
+        await self.play_track(self._playlist[track_index_])
 
     async def next_pl_track(self):
         """ coro: play next track """
@@ -67,19 +64,17 @@ class PlPlayer(DfPlayer):
 
     async def dec_vol(self):
         """ increase volume by 1 unit """
-        async with self.tx_lock:
-            if self.vol > self.VOL_MIN:
-                self.vol -= 1
-                await self.set_ch_vol()
-                asyncio.create_task(self.led.blink(self.vol))
+        if self.vol > self.VOL_MIN:
+            self.vol -= 1
+            await self.set_vol(self.vol)
+            asyncio.create_task(self.led.blink(self.vol))
 
     async def inc_vol(self):
         """ increase volume by 1 unit """
-        async with self.tx_lock:
-            if self.vol < self.VOL_MAX:
-                self.vol += 1
-                await self.set_ch_vol()
-                asyncio.create_task(self.led.blink(self.vol))
+        if self.vol < self.VOL_MAX:
+            self.vol += 1
+            await self.set_vol(self.vol)
+            asyncio.create_task(self.led.blink(self.vol))
 
 
 async def main():
