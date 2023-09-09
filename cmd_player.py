@@ -37,12 +37,11 @@ async def main():
             tokens = line.split(' ')
             cmd_ = tokens[0]
             params = [int(p) for p in tokens[1:]]
-            print(f'{cmd_} {params}')
             if cmd_ == 'zzz':
                 await player.track_end_ev.wait()
                 await asyncio.sleep(params[0])
             elif cmd_ == 'trk':
-                await player.play_track(params[0])
+                await player.play_track_after(params[0])
             elif cmd_ == 'trl':
                 await player.play_trk_list(params)
             elif cmd_ == 'nxt':
@@ -56,14 +55,18 @@ async def main():
             elif cmd_ == 'stp':
                 await player.pause()
 
+    def instantiate_player(uart_params_):
+        """ build player from components """
+        rx_queue = Buffer()
+        data_link = DataLink(*uart_params, rx_queue)
+        cmd_handler = CommandHandler(data_link)
+        player_ = ExtPlayer(cmd_handler)
+        return player_
+
     # pin_tx, pin_rx, baud_rate, ba_size)
     uart_params = (0, 1, 9600, 10)
-    rx_queue = Buffer()
-    # instantiate rx queue and app layers
-    data_link = DataLink(*uart_params, rx_queue)
-    cmd_handler = CommandHandler(data_link)
-    player = ExtPlayer(cmd_handler)
-    await asyncio.sleep_ms(1000)  # allow power-up
+    player = instantiate_player(uart_params)
+
     await player.startup()
 
     print(f"{player.config['name']}: configuration file loaded")
@@ -76,7 +79,7 @@ async def main():
     await asyncio.sleep_ms(1000)
     player.print_player_settings()
     # additional commands can now be run
-    await player.play_track(77)
+    await player.play_track_after(77)
     await player.track_end_ev.wait()
     await asyncio.sleep_ms(1000)
 

@@ -53,7 +53,6 @@ class CommandHandler:
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
         self.vol = 0
-        self.vol_min = 0
         self.eq = 'normal'
         self.track_count = 0
         self.track = 0
@@ -147,9 +146,8 @@ class CommandHandler:
 
     async def play_track(self, track):
         """ coro: play track n """
-        await self.track_end_ev.wait()
-        self.track_end_ev.clear()
         await self._send_command(0x03, track)
+        self.track_end_ev.clear()
         self.track = track
 
     async def play(self):
@@ -163,7 +161,7 @@ class CommandHandler:
     async def set_vol(self, level):
         """ coro: set volume level 0-VOL_MAX """
         level = min(self.VOL_MAX, level)
-        level = max(self.vol_min, level)
+        level = max(0, level)
         await self._send_command(0x06, level)
         self.vol = level
 
@@ -176,6 +174,7 @@ class CommandHandler:
         else:
             param = self.eq_val['normal']
         await self._send_command(0x07, param)
+        self.eq = eq_key
 
     # query methods
     

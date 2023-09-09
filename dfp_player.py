@@ -13,7 +13,6 @@ class DfPlayer:
 
     START_TRACK = const(1)
     VOL_MAX = const(10)
-    VOL_MIN = const(0)
 
     def __init__(self, command_h_):
         self.cmd_h = command_h_
@@ -22,23 +21,19 @@ class DfPlayer:
         self.vol = 0
         self.vol_factor = 1
         self.eq = 0
-        self.eq_settings = list(self.cmd_h.eq_val.keys())
+        self.eq_val = self.cmd_h.eq_val
         self.config_file = ConfigFile('config.json')
         self.config = {}
         self.init_config()
         self.track_count = 0
-
-        # map methods
-        self.play = self.cmd_h.play
-        self.pause = self.cmd_h.pause
         self.track_end_ev = self.cmd_h.track_end_ev
-        self.track_end_ev.set()
+        self.track_end_ev.set()  # no track playing yet
         self.send_query = self.cmd_h.send_query
 
     async def reset(self):
         """ reset player including track_count """
         await self.cmd_h.reset()
-        await self.send_query('sd_files')
+        await self.cmd_h.send_query('sd_files')
         self.track_count = self.cmd_h.track_count
     
     # config methods
@@ -74,32 +69,33 @@ class DfPlayer:
 
     # player methods
 
-    async def play_track(self, track):
-        """ coro: play track n - allows pause """
+    async def play_track_after(self, track):
+        """ coro: play track after previous track """
+        await self.cmd_h.track_end_ev.wait()
         if self.START_TRACK <= track <= self.track_count:
             await self.cmd_h.play_track(track)
 
     async def set_vol(self, level):
-        """ coro: set volume level 0-10 """
-        if self.VOL_MIN <= level <= self.VOL_MAX:
-            self.vol = level
-            await self.cmd_h.set_vol(self.vol * self.vol_factor)
+        """ coro: set volume level """
+        self.vol = min(self.VOL_MAX, level)
+        self.vol = max(0, level)
+        await self.cmd_h.set_vol(self.vol * self.vol_factor)
     
     async def dec_vol(self):
-        """ increase volume by 1 unit """
-        if self.vol > self.VOL_MIN:
+        """ decrement volume by 1 unit """
+        if self.vol > 0:
             self.vol -= 1
-            await self.set_vol(self.vol)
+            await self.cmd_h.set_vol(self.vol * self.vol_factor)
 
     async def inc_vol(self):
-        """ increase volume by 1 unit """
+        """ increment volume by 1 unit """
         if self.vol < self.VOL_MAX:
             self.vol += 1
-            await self.set_vol(self.vol)
+            await self.cmd_h.set_vol(self.vol * self.vol_factor)
 
     async def set_eq(self, setting):
         """ coro: set eq to preset """
-        if setting in self.eq_settings:
+        if setting in self.eq_val:
             self.eq = setting
             await self.cmd_h.set_eq(self.eq)
 

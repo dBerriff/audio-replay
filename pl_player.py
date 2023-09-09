@@ -40,7 +40,7 @@ class PlPlayer(DfPlayer):
             - offset by -1 to match list index
         """
         self._pl_track_index = track_index_
-        await self.play_track(self._playlist[track_index_])
+        await self.play_track_after(self._playlist[track_index_])
 
     async def next_pl_track(self):
         """ coro: play next track """
