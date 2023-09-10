@@ -17,7 +17,7 @@ class Buffer:
         self.is_space.set()
 
     async def put(self, item):
-        """ add item to buffer
+        """ coro: add item to buffer
             - Lock() supports multiple producers
         """
         async with self.put_lock:
@@ -27,7 +27,7 @@ class Buffer:
             self.is_space.clear()
 
     async def get(self):
-        """ remove item from buffer
+        """ coro: remove item from buffer
             - assumes single consumer
         """
         async with self.get_lock:
@@ -53,7 +53,7 @@ class Queue(Buffer):
         self.next = 0
 
     async def put(self, item):
-        """ add item to the queue """
+        """ coro: add item to the queue """
         async with self.put_lock:
             await self.is_space.wait()
             self.queue[self.next] = item
@@ -63,7 +63,7 @@ class Queue(Buffer):
             self.is_data.set()
 
     async def get(self):
-        """ remove item from the queue """
+        """ coro: remove item from the queue """
         await self.is_data.wait()
         item = self.queue[self.head]
         self.head = (self.head + 1) % self.length

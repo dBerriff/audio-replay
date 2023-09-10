@@ -62,7 +62,7 @@ async def main():
         """ build player from components """
         tx_queue = Buffer()
         rx_queue = Buffer()
-        data_link = DataLink(*uart_params, tx_queue, rx_queue)
+        data_link = DataLink(*uart_params_, tx_queue, rx_queue)
         cmd_handler = CommandHandler(data_link)
         return ExtPlayer(cmd_handler)
 

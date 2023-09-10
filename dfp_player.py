@@ -27,6 +27,8 @@ class DfPlayer:
         self.track_end_ev = self.cmd_h.track_end_ev
         self.track_end_ev.set()  # no track playing yet
         self.qry_keys = self.cmd_h.qry_cmds.keys()
+        self.pause = self.cmd_h.pause
+        self.play = self.cmd_h.play
 
     @property
     def vol(self):
@@ -130,7 +132,6 @@ class DfPlayer:
                 pass
             elif query == 'sd_track':
                 pass
-            
 
     def print_player_settings(self):
         """ print selected player settings """

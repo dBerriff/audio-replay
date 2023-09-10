@@ -20,21 +20,24 @@ async def main():
             await asyncio.sleep_ms(5000)
             player.print_player_settings()
 
+    def build_player(uart_params_, btn_pins_):
+        """ build player from components """
+        data_link = DataLink(*uart_params_, Buffer(), Buffer())
+        cmd_handler = CommandHandler(data_link)
+        player_ = PlPlayer(cmd_handler)
+        buttons_ = DfpButtons(*btn_pins_)
+        buttons_.next_track = player_.next_pl_track
+        buttons_.dec_vol = player_.dec_vol
+        buttons_.inc_vol = player_.inc_vol
+        return player_, buttons_
+
     # pin_tx, pin_rx, baud_rate, ba_size)
     uart_params = (0, 1, 9600, 10)
     # play_pin, v_dec_pin, v_inc_pin
     btn_pins = (20, 21, 22)
-    tx_queue = Buffer()
-    rx_queue = Buffer()
-    # instantiate rx queue and app layers
-    data_link = DataLink(*uart_params, tx_queue, rx_queue)
-    cmd_handler = CommandHandler(data_link)
-    player = PlPlayer(cmd_handler)
+
+    player, buttons = build_player(uart_params, btn_pins)
     asyncio.create_task(player.led.blink(10))
-    buttons = DfpButtons(*btn_pins)
-    buttons.next_track = player.next_pl_track
-    buttons.dec_vol = player.dec_vol
-    buttons.inc_vol = player.inc_vol
     buttons.poll_buttons()
 
     player.print_player_settings()
@@ -45,6 +48,7 @@ async def main():
     player.print_player_settings()
 
     player.build_playlist(shuffled=False)
+    # play track 1 as test
     await player.play_pl_track(1)
     await loop()
 

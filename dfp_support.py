@@ -125,17 +125,6 @@ class DfpButtons:
         self.inc_vol = None
         self.save_config = None
 
-    def poll_buttons(self):
-        """ start button polling """
-        # buttons: self poll
-        asyncio.create_task(self.play_btn.poll_state())
-        asyncio.create_task(self.v_inc_btn.poll_state())
-        asyncio.create_task(self.v_dec_btn.poll_state())
-        # buttons: respond to press
-        asyncio.create_task(self.play_btn_pressed())
-        asyncio.create_task(self.inc_btn_pressed())
-        asyncio.create_task(self.dec_btn_pressed())
-
     async def play_btn_pressed(self):
         """ change player volume setting
             - simple Button
@@ -173,6 +162,17 @@ class DfpButtons:
                 # await self.save_config()
                 pass
             button_.press_ev.clear()
+
+    def poll_buttons(self):
+        """ start button polling """
+        # buttons: self poll
+        asyncio.create_task(self.play_btn.poll_state())
+        asyncio.create_task(self.v_inc_btn.poll_state())
+        asyncio.create_task(self.v_dec_btn.poll_state())
+        # buttons: respond to press
+        asyncio.create_task(self.play_btn_pressed())
+        asyncio.create_task(self.inc_btn_pressed())
+        asyncio.create_task(self.dec_btn_pressed())
 
 
 def shuffle(list_):
