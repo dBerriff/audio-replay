@@ -20,14 +20,14 @@ async def main():
             await asyncio.sleep_ms(5000)
             player.print_player_settings()
 
-
     # pin_tx, pin_rx, baud_rate, ba_size)
     uart_params = (0, 1, 9600, 10)
     # play_pin, v_dec_pin, v_inc_pin
     btn_pins = (20, 21, 22)
+    tx_queue = Buffer()
     rx_queue = Buffer()
     # instantiate rx queue and app layers
-    data_link = DataLink(*uart_params, rx_queue)
+    data_link = DataLink(*uart_params, tx_queue, rx_queue)
     cmd_handler = CommandHandler(data_link)
     player = PlPlayer(cmd_handler)
     asyncio.create_task(player.led.blink(10))

@@ -26,7 +26,7 @@ class DfPlayer:
         self.track_count = 0
         self.track_end_ev = self.cmd_h.track_end_ev
         self.track_end_ev.set()  # no track playing yet
-        self.send_query = self.cmd_h.send_query
+        self.qry_keys = self.cmd_h.qry_cmds.keys()
 
     @property
     def vol(self):
@@ -35,7 +35,7 @@ class DfPlayer:
     @vol.setter
     def vol(self, value):
         self.cmd_h.vol = value * self.vol_factor
-
+    
     @property
     def eq(self):
         return self.cmd_h.eq
@@ -116,6 +116,21 @@ class DfPlayer:
         if setting in self.eq_val:
             self.eq = setting
             await self.cmd_h.set_eq(self.eq)
+
+    async def send_query(self, query):
+        """ send query and wait for response event
+            - 'vol', 'eq', 'sd_files', 'sd_track' """
+        if query in self.qry_keys:
+            await self.cmd_h.send_query(query)
+            if query == 'vol':
+                print(f'Query vol: {self.vol}')
+            elif query == 'eq':
+                print(f'Query eq: {self.eq}')
+            elif query == 'sd_tracks':
+                pass
+            elif query == 'sd_track':
+                pass
+            
 
     def print_player_settings(self):
         """ print selected player settings """

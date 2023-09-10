@@ -6,9 +6,8 @@
 
 """
     adapted and developed by David B Jones for Famous Trains Derby.
-    - http://www.famoustrains.org.uk
-    - uses Queue for receive stream_tr although not actually required at 9600 BAUD
-    - ! deque is not implemented in MP so code uses list
+    - uses a queue or buffer for Tx and Rx streams
+    - ! deque is not implemented in MP so queue uses a list of items
 """
 
 import uasyncio as asyncio
@@ -27,8 +26,11 @@ class StreamTR:
         self.s_reader = asyncio.StreamReader(self.stream)
         self.in_buf = bytearray(buf_size)
 
+        asyncio.create_task(self.receiver())
+        asyncio.create_task(self.sender())
+
     async def sender(self):
-        """ coro: send out data item """
+        """ coro: send out Tx data-stream items from Tx queue """
         while True:
             await self.tx_queue.is_data.wait()
             data = await self.tx_queue.get()
@@ -36,9 +38,9 @@ class StreamTR:
             await self.s_writer.drain()
 
     async def receiver(self):
-        """ coro: read data stream item into buffer """
+        """ coro: read Rx data-stream item into Rx buffer """
         while True:
-            n_bytes = await self.s_reader.readinto(self.in_buf)
+            await self.s_reader.readinto(self.in_buf)
             await self.rx_queue.put(bytearray(self.in_buf))
 
 

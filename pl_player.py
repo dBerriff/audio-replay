@@ -63,14 +63,14 @@ class PlPlayer(DfPlayer):
             await self.next_pl_track()
 
     async def dec_vol(self):
-        """ increase volume by 1 unit """
-        if self.vol > self.VOL_MIN:
+        """ decrement volume """
+        if self.vol > 1:
             self.vol -= 1
             await self.set_vol(self.vol)
             asyncio.create_task(self.led.blink(self.vol))
 
     async def inc_vol(self):
-        """ increase volume by 1 unit """
+        """ increment volume """
         if self.vol < self.VOL_MAX:
             self.vol += 1
             await self.set_vol(self.vol)

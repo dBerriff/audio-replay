@@ -21,13 +21,11 @@ class CommandHandler:
               'vol': 5,
               'eq': 'normal'
               }
-
     qry_cmds = {'vol': 0x43,
                 'eq': 0x44,
                 'sd_files': 0x48,
                 'sd_track': 0x4c
                 }
-
     BA_SIZE = const(10)  # bytearray
     # data-byte indices
     CMD = const(3)
@@ -43,16 +41,26 @@ class CommandHandler:
     eq_val = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
     val_eq = {value: key for key, value in eq_val.items()}
 
+    @classmethod
+    def get_checksum(cls, word_):
+        """ 2's comp. checksum of bytes 1 to parameter-bytes inclusive """
+        return -sum(word_[1:cls.P_L + 1]) & 0xffff
+
+    @classmethod
+    def check_checksum(cls, word_):
+        """ returns True if checksum is valid """
+        byte_sum = sum(word_[1:cls.P_L + 1])
+        checksum = (word_[cls.C_M] << 8) + word_[cls.C_L]
+        return (byte_sum + checksum) & 0xffff == 0
+
     def __init__(self, data_link_):
-        self.data_link = data_link_
-        self.stream_tx_rx = self.data_link.stream_tx_rx
-        self.sender = self.data_link.sender
-        self.tx_word = bytearray(self.BA_TEMPLATE)
-        self.tx_queue = self.data_link.tx_queue
-        self.rx_word = bytearray(self.BA_TEMPLATE)
-        self.rx_queue = self.data_link.rx_queue
-        self.rx_cmd = 0x00
-        self.rx_param = 0x0000
+        self._data_link = data_link_
+        self.stream_tx_rx = self._data_link.stream_tx_rx
+        self.tx_ba = bytearray(self.BA_TEMPLATE)
+        self.tx_queue = self._data_link.tx_queue
+        self.rx_queue = self._data_link.rx_queue
+        self._rx_cmd = 0x00  # for testing
+        self._rx_param = 0x0000  # for testing
         self.vol = 0
         self.eq = 'normal'
         self.track_count = 0
@@ -60,24 +68,9 @@ class CommandHandler:
         self.ack_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
         self.error_ev = asyncio.Event()  # not currently monitored
-        self.tx_lock = asyncio.Lock()
         self.query_rx_ev = asyncio.Event()
-        self.query_lock = asyncio.Lock()
-
-        asyncio.create_task(self.stream_tx_rx.receiver())
-        asyncio.create_task(self.stream_tx_rx.sender())
+        self.tx_lock = asyncio.Lock()
         asyncio.create_task(self.consume_rx_data())
-
-    def get_checksum(self, word_):
-        """ 2's complement checksum of bytes 1 to 6 """
-        return -sum(word_[1:self.C_M])
-
-    def check_checksum(self, word_):
-        """ returns 0 if checksum is valid """
-        byte_sum = sum(word_[1:self.C_M])
-        checksum_ = word_[self.C_M] << 8  # msb
-        checksum_ += word_[self.C_L]  # lsb
-        return (byte_sum + checksum_) & 0xffff
 
     async def _send_command(self, cmd, param=0):
         """ coro: load tx bytearray word and send
@@ -85,20 +78,28 @@ class CommandHandler:
         """
         async with self.tx_lock:
             self.ack_ev.clear()
-            self.tx_word[self.CMD] = cmd
-            self.tx_word[self.P_M], self.tx_word[self.P_L] = hex_f.slice_reg16(param)
-            self.tx_word[self.C_M], self.tx_word[self.C_L] = hex_f.slice_reg16(self.get_checksum(self.tx_word))
-            await self.tx_queue.put(self.tx_word)
+            self.tx_ba[self.CMD] = cmd
+            self.tx_ba[self.P_M], self.tx_ba[self.P_L] = hex_f.slice_reg16(param)
+            self.tx_ba[self.C_M], self.tx_ba[self.C_L] = hex_f.slice_reg16(self.get_checksum(self.tx_ba))
+            await self.tx_queue.put(self.tx_ba)
             await self.ack_ev.wait()  # wait for DFPlayer ACK
+            await asyncio.sleep_ms(20)  # DFP recovery time?
+
+    async def send_query(self, query):
+        """ send query and wait for response event
+            - 'vol', 'eq', 'sd_files', 'sd_track' """
+        self.query_rx_ev.clear()
+        await self._send_command(self.qry_cmds[query])
+        await self.query_rx_ev.wait()
 
     def parse_rx_message(self, message):
-        """ parse and act on incoming message parameters """
-        if self.check_checksum(message):
-            print(f'{message}: error in checksum')
-            return
+        """ parse incoming message to cmd and params """
         rx_cmd = message[self.CMD]
         rx_param = hex_f.m_l_reg16(message[self.P_M], message[self.P_L])
-        # check for specific messages that require action
+        return rx_cmd, rx_param
+
+    def evaluate_rx_message(self, rx_cmd, rx_param):
+        """ evaluate incoming command for required action or errors """
         if rx_cmd == 0x41:  # ack
             self.ack_ev.set()
         elif rx_cmd == 0x3d:  # sd track finished
@@ -124,14 +125,17 @@ class CommandHandler:
             print('TF-card inserted.')
         elif rx_cmd == 0x3b:  # media_remove
             raise Exception('DFPlayer error: SD-card removed!')
-        return rx_cmd, rx_param
 
     async def consume_rx_data(self):
-        """ coro: consume and parse received data word """
+        """ coro: consume, parse and evaluate received bytearray """
         while True:
-            await self.rx_queue.is_data.wait()  # wait for data input
-            self.rx_word = await self.rx_queue.get()
-            self.rx_cmd, self.rx_param = self.parse_rx_message(self.rx_word)
+            await self.rx_queue.is_data.wait()
+            rx_ba = await self.rx_queue.get()
+            if not self.check_checksum(rx_ba):
+                print(f'{hex_f.byte_array_str(rx_ba)}: checksum error')
+                continue
+            self._rx_cmd, self._rx_param = self.parse_rx_message(rx_ba)
+            self.evaluate_rx_message(self._rx_cmd, self._rx_param)
 
     # DFPlayer mini control
     async def reset(self):
@@ -140,8 +144,8 @@ class CommandHandler:
         """
         await self._send_command(0x0c, 0)
         await asyncio.sleep_ms(2000)  # allow time for the DFPlayer reset
-        if self.rx_cmd != 0x3f:
-            if self.rx_cmd == 0x41:
+        if self._rx_cmd != 0x3f:
+            if self._rx_cmd == 0x41:
                 raise Exception(f'DFPlayer ACK with error: no SD card?')
             else:
                 raise Exception('DFPlayer no ACK.')
@@ -174,12 +178,7 @@ class CommandHandler:
 
     # query methods
     
-    async def send_query(self, query):
-        """ send and wait for query response """
-        async with self.query_lock:
-            self.query_rx_ev.clear()
-            await self._send_command(self.qry_cmds[query])
-            await self.query_rx_ev.wait()
+
 
 
 async def main():
