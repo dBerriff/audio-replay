@@ -13,6 +13,7 @@ class Buffer:
         self.is_data = asyncio.Event()
         self.is_space = asyncio.Event()
         self.put_lock = asyncio.Lock()
+        self.get_lock = asyncio.Lock()
         self.is_space.set()
 
     async def put(self, item):
@@ -29,10 +30,11 @@ class Buffer:
         """ remove item from buffer
             - assumes single consumer
         """
-        await self.is_data.wait()
-        self.is_space.set()
-        self.is_data.clear()
-        return self._item
+        async with self.get_lock:
+            await self.is_data.wait()
+            self.is_space.set()
+            self.is_data.clear()
+            return self._item
 
 
 class Queue(Buffer):

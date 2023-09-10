@@ -16,12 +16,10 @@ class DfPlayer:
 
     def __init__(self, command_h_):
         self.cmd_h = command_h_
+        self.vol_factor = None
+        self.eq_val = self.cmd_h.eq_val
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
-        self.vol = 0
-        self.vol_factor = 1
-        self.eq = 0
-        self.eq_val = self.cmd_h.eq_val
         self.config_file = ConfigFile('config.json')
         self.config = {}
         self.init_config()
@@ -29,6 +27,22 @@ class DfPlayer:
         self.track_end_ev = self.cmd_h.track_end_ev
         self.track_end_ev.set()  # no track playing yet
         self.send_query = self.cmd_h.send_query
+
+    @property
+    def vol(self):
+        return self.cmd_h.vol // self.vol_factor
+    
+    @vol.setter
+    def vol(self, value):
+        self.cmd_h.vol = value * self.vol_factor
+
+    @property
+    def eq(self):
+        return self.cmd_h.eq
+    
+    @eq.setter
+    def eq(self, value):
+        self.cmd_h.eq = value
 
     async def reset(self):
         """ reset player including track_count """
@@ -47,8 +61,8 @@ class DfPlayer:
         else:
             self.config = self.cmd_h.config
             self.config_file.write_file(self.config)
-        self.vol = self.config['vol']
         self.vol_factor = self.config['vol_factor']
+        self.vol = self.config['vol']
         self.eq = self.config['eq']
 
     def save_config(self):
@@ -69,11 +83,15 @@ class DfPlayer:
 
     # player methods
 
+    async def play_track(self, track):
+        """ coro: play track after previous track """
+        if self.START_TRACK <= track <= self.track_count:
+            await self.cmd_h.play_track(track)
+
     async def play_track_after(self, track):
         """ coro: play track after previous track """
         await self.cmd_h.track_end_ev.wait()
-        if self.START_TRACK <= track <= self.track_count:
-            await self.cmd_h.play_track(track)
+        await self.play_track(track)
 
     async def set_vol(self, level):
         """ coro: set volume level """
@@ -103,6 +121,7 @@ class DfPlayer:
         """ print selected player settings """
         result = f'track: {self.cmd_h.track}, '
         result += f'vol: {self.cmd_h.vol // self.vol_factor}, '
+        result += f'vol_factor: {self.vol_factor}, '
         result += f'eq: {self.cmd_h.eq}'
         print(result)
 

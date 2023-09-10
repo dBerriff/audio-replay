@@ -48,6 +48,7 @@ class CommandHandler:
         self.stream_tx_rx = self.data_link.stream_tx_rx
         self.sender = self.data_link.sender
         self.tx_word = bytearray(self.BA_TEMPLATE)
+        self.tx_queue = self.data_link.tx_queue
         self.rx_word = bytearray(self.BA_TEMPLATE)
         self.rx_queue = self.data_link.rx_queue
         self.rx_cmd = 0x00
@@ -64,6 +65,7 @@ class CommandHandler:
         self.query_lock = asyncio.Lock()
 
         asyncio.create_task(self.stream_tx_rx.receiver())
+        asyncio.create_task(self.stream_tx_rx.sender())
         asyncio.create_task(self.consume_rx_data())
 
     def get_checksum(self, word_):
@@ -86,7 +88,7 @@ class CommandHandler:
             self.tx_word[self.CMD] = cmd
             self.tx_word[self.P_M], self.tx_word[self.P_L] = hex_f.slice_reg16(param)
             self.tx_word[self.C_M], self.tx_word[self.C_L] = hex_f.slice_reg16(self.get_checksum(self.tx_word))
-            await self.sender(self.tx_word)
+            await self.tx_queue.put(self.tx_word)
             await self.ack_ev.wait()  # wait for DFPlayer ACK
 
     def parse_rx_message(self, message):
@@ -160,8 +162,6 @@ class CommandHandler:
 
     async def set_vol(self, level):
         """ coro: set volume level 0-VOL_MAX """
-        level = min(self.VOL_MAX, level)
-        level = max(0, level)
         await self._send_command(0x06, level)
         self.vol = level
 
@@ -169,11 +169,7 @@ class CommandHandler:
         """ set eq to key in:
             'normal', 'pop', 'rock', 'jazz', 'classic', 'bass'
         """
-        if eq_key in self.eq_val:
-            param = self.eq_val[eq_key]
-        else:
-            param = self.eq_val['normal']
-        await self._send_command(0x07, param)
+        await self._send_command(0x07, self.eq_val[eq_key])
         self.eq = eq_key
 
     # query methods
@@ -191,8 +187,9 @@ async def main():
     from data_link import DataLink
     from queue import Buffer
 
+    tx_queue = Buffer()
     rx_queue = Buffer()
-    data_link = DataLink(0, 1, 9600, 10, rx_queue)
+    data_link = DataLink(0, 1, 9600, 10, tx_queue, rx_queue)
     cmd_handler = CommandHandler(data_link)
     print(cmd_handler)
 

@@ -23,6 +23,7 @@ async def main():
             - work-in-progress! """
 
         for line in commands_:
+            await player.cmd_h.track_end_ev.wait()
             line = line.strip()  # trim
             if line == '':  # skip empty line
                 continue
@@ -37,6 +38,7 @@ async def main():
             tokens = line.split(' ')
             cmd_ = tokens[0]
             params = [int(p) for p in tokens[1:]]
+            print(cmd_, params)
             if cmd_ == 'zzz':
                 await player.track_end_ev.wait()
                 await asyncio.sleep(params[0])
@@ -55,31 +57,32 @@ async def main():
             elif cmd_ == 'stp':
                 await player.pause()
 
-    def instantiate_player(uart_params_):
+    def build_player(uart_params_):
         """ build player from components """
+        tx_queue = Buffer()
         rx_queue = Buffer()
-        data_link = DataLink(*uart_params, rx_queue)
+        data_link = DataLink(*uart_params, tx_queue, rx_queue)
         cmd_handler = CommandHandler(data_link)
         player_ = ExtPlayer(cmd_handler)
         return player_
 
     # pin_tx, pin_rx, baud_rate, ba_size)
     uart_params = (0, 1, 9600, 10)
-    player = instantiate_player(uart_params)
+    player = build_player(uart_params)
 
     await player.startup()
 
     print(f"{player.config['name']}: configuration file loaded")
     print(f'Number of SD tracks: {player.track_count}')
-
+    player.print_player_settings()
     print('Run commands')
     commands = get_command_lines('test.txt')
     player.repeat_flag = True  # allow repeat 
     await run_commands(commands)
     await asyncio.sleep_ms(1000)
-    player.print_player_settings()
     # additional commands can now be run
     await player.play_track_after(77)
+    player.print_player_settings()
     await player.track_end_ev.wait()
     await asyncio.sleep_ms(1000)
 

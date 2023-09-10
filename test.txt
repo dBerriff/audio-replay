@@ -1,5 +1,5 @@
 # test file for cmd_player.py
-vol 6
+vol 4
 trk 79
 trl 76  9  25
 zzz 2
