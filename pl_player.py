@@ -21,13 +21,6 @@ class PlPlayer(DfPlayer):
     def playlist(self):
         return self._playlist
 
-    def save_config(self):
-        """ save config settings """
-        self.config['vol'] = self.vol
-        self.config['eq'] = self.eq
-        self.config_file.write_file(self.config)
-        asyncio.create_task(self.led.blink(self.config['vol']))
-
     def build_playlist(self, shuffled=False):
         """ shuffle playlist track sequence """
         self._playlist = [i + 1 for i in range(self.track_count)]

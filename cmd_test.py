@@ -5,7 +5,7 @@ import uasyncio as asyncio
 from data_link import DataLink
 from dfp_mini import CommandHandler
 from cmd_player import ExtPlayer
-from queue import Buffer
+from queue import Buffer, Queue
 
 
 async def main():
@@ -60,31 +60,27 @@ async def main():
 
     def build_player(uart_params_):
         """ build player from components """
-        tx_queue = Buffer()
-        rx_queue = Buffer()
-        data_link = DataLink(*uart_params_, tx_queue, rx_queue)
+        data_link = DataLink(*uart_params_, Buffer(), Buffer())
         cmd_handler = CommandHandler(data_link)
-        return ExtPlayer(cmd_handler)
+        ext_player = ExtPlayer(cmd_handler)
+        return ext_player
 
     # pin_tx, pin_rx, baud_rate, ba_size)
     uart_params = (0, 1, 9600, 10)
     player = build_player(uart_params)
-
     await player.startup()
-
     print(f"{player.config['name']}: configuration file loaded")
     print(f'Number of SD tracks: {player.track_count}')
-    player.print_player_settings()
     print('Run commands')
     commands = get_command_lines('test.txt')
-    player.repeat_flag = True  # allow repeat 
     await run_commands(commands)
     await asyncio.sleep_ms(1000)
     # additional commands can now be run
     await player.play_track_after(77)
-    player.print_player_settings()
     await player.track_end_ev.wait()
     await asyncio.sleep_ms(1000)
+    player.print_player_settings()
+    player.save_config()
 
 if __name__ == '__main__':
     try:

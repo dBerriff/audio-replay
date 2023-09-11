@@ -68,7 +68,7 @@ class DfPlayer:
         self.eq = self.config['eq']
 
     def save_config(self):
-        """ update and save config dictionary """
+        """ save config settings """
         self.config['vol'] = self.vol
         self.config['eq'] = self.eq
         self.config_file.write_file(self.config)

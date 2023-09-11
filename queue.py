@@ -64,13 +64,14 @@ class Queue(Buffer):
 
     async def get(self):
         """ coro: remove item from the queue """
-        await self.is_data.wait()
-        item = self.queue[self.head]
-        self.head = (self.head + 1) % self.length
-        if self.head == self.next:
-            self.is_data.clear()
-        self.is_space.set()
-        return item
+        async with self.get_lock:
+            await self.is_data.wait()
+            item = self.queue[self.head]
+            self.head = (self.head + 1) % self.length
+            if self.head == self.next:
+                self.is_data.clear()
+            self.is_space.set()
+            return item
 
     @property
     def q_len(self):

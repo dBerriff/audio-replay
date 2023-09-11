@@ -175,11 +175,7 @@ class CommandHandler:
         """
         await self._send_command(0x07, self.eq_val[eq_key])
         self.eq = eq_key
-
-    # query methods
     
-
-
 
 async def main():
     """"""
