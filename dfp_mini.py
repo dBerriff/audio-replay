@@ -106,7 +106,7 @@ class CommandHandler:
             self.track_end_ev.set()
         elif rx_cmd == 0x3f:  # qry_init
             if (rx_param & 0x0002) != 0x0002:
-                raise Exception('DFPlayer error: no TF-card?')
+                raise Exception('DFPlayer error: no SD-card?')
         elif rx_cmd == 0x40:  # error
             self.error_ev.set()  # not currently monitored
         elif rx_cmd == 0x43:  # qry_vol
