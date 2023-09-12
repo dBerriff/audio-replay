@@ -122,7 +122,7 @@ class CommandHandler:
             self.track = rx_param
             self.query_rx_ev.set()
         elif rx_cmd == 0x3a:  # media_insert
-            print('TF-card inserted.')
+            print('SD-card inserted.')
         elif rx_cmd == 0x3b:  # media_remove
             raise Exception('DFPlayer error: SD-card removed!')
 
