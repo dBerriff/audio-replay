@@ -3,10 +3,10 @@
 
 import uasyncio as asyncio
 from data_link import DataLink
-from dfp_mini import CommandHandler
+from dfp_mini import DfpMiniCh
 from pl_player import PlPlayer
 from dfp_support import DfpButtons
-from queue import Buffer
+from uqueue import Buffer
 
 
 async def main():
@@ -23,7 +23,7 @@ async def main():
     def build_player(uart_params_, btn_pins_):
         """ build player from components """
         data_link = DataLink(*uart_params_, Buffer(), Buffer())
-        cmd_handler = CommandHandler(data_link)
+        cmd_handler = DfpMiniCh(data_link)
         pl_player = PlPlayer(cmd_handler)
         btns = DfpButtons(*btn_pins_)
         btns.next_track = pl_player.next_pl_track

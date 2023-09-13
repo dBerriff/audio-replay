@@ -5,7 +5,7 @@ import uasyncio as asyncio
 from dfp_player import DfPlayer
 
 
-class ExtPlayer(DfPlayer):
+class CmdPlayer(DfPlayer):
     """ play tracks under simple command control """
 
     def __init__(self, command_h_):

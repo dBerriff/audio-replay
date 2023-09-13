@@ -9,7 +9,7 @@ import uasyncio as asyncio
 import hex_fns as hex_f
 
 
-class CommandHandler:
+class DfpMiniCh:
     """ formats, sends and receives command and query messages
         - N.B. 'reset' must be called to initialise object
         - tx messages are directly sent
@@ -31,6 +31,7 @@ class CommandHandler:
     CMD = const(3)
     P_M = const(5)  # parameter
     P_L = const(6)
+    CS_U = const(P_L + 1)
     C_M = const(7)  # checksum
     C_L = const(8)
     VOL_MAX = const(30)
@@ -44,12 +45,12 @@ class CommandHandler:
     @classmethod
     def get_checksum(cls, word_):
         """ 2's comp. checksum of bytes 1 to parameter-bytes inclusive """
-        return -sum(word_[1:cls.P_L + 1]) & 0xffff
+        return -sum(word_[1:cls.CS_U]) & 0xffff
 
     @classmethod
     def check_checksum(cls, word_):
         """ returns True if checksum is valid """
-        byte_sum = sum(word_[1:cls.P_L + 1])
+        byte_sum = sum(word_[1:cls.CS_U])
         checksum = (word_[cls.C_M] << 8) + word_[cls.C_L]
         return (byte_sum + checksum) & 0xffff == 0
 
@@ -137,7 +138,22 @@ class CommandHandler:
             self._rx_cmd, self._rx_param = self.parse_rx_message(rx_ba)
             self.evaluate_rx_message(self._rx_cmd, self._rx_param)
 
-    # DFPlayer mini control
+    def print_player_settings(self):
+        """ print selected player settings """
+        result = f'player: {self.config["name"]}, '
+        result += f'track: {self.track}, '
+        result += f'vol: {self.vol}, '
+        result += f'vol_factor: {self.config["vol_factor"]}, '
+        result += f'eq: {self.eq}'
+        print(result)
+
+
+class DfpMiniControl(DfpMiniCh):
+    """ DFPlayer Mini control methods """
+
+    def __init__(self, data_link_):
+        super().__init__(data_link_)
+
     async def reset(self):
         """ coro: reset the DFPlayer
             - with SD card response should be: 0x3f 0x0002
@@ -180,12 +196,12 @@ class CommandHandler:
 async def main():
     """"""
     from data_link import DataLink
-    from queue import Buffer
+    from uqueue import Buffer
 
     tx_queue = Buffer()
     rx_queue = Buffer()
     data_link = DataLink(0, 1, 9600, 10, tx_queue, rx_queue)
-    cmd_handler = CommandHandler(data_link)
+    cmd_handler = DfpMiniControl(data_link)
     print(cmd_handler)
 
 if __name__ == '__main__':

@@ -133,14 +133,6 @@ class DfPlayer:
             elif query == 'sd_track':
                 pass
 
-    def print_player_settings(self):
-        """ print selected player settings """
-        result = f'track: {self.cmd_h.track}, '
-        result += f'vol: {self.cmd_h.vol // self.vol_factor}, '
-        result += f'vol_factor: {self.vol_factor}, '
-        result += f'eq: {self.cmd_h.eq}'
-        print(result)
-
 
 async def main():
     """"""
