@@ -1,5 +1,8 @@
-# dfp_player.py
-""" Control DFPlayer Mini over UART """
+# cmd_test.py
+""" Control DFPlayer Mini over UART from text-file commands
+    - command format is: cmd parameter-list, space (or comma) delimited
+    - cmd is 3-letter string; parameters are list of int
+"""
 
 import uasyncio as asyncio
 from data_link import DataLink
@@ -19,7 +22,7 @@ async def main():
 
     def parse_command(cmd_line):
         """ parse command line to cmd and param-list
-            - allow for space or comma delimiter """
+            - space (or comma) delimiter """
         cmd_line = cmd_line.strip()  # trim start/end white space
         if cmd_line == '':
             cmd_, params = '', []
@@ -37,9 +40,9 @@ async def main():
 
     async def run_commands(commands_):
         """ control DFP from simple text commands
-            - format is: "cmd parameter" or "cmd, parameter"
-            - work-in-progress! """
-        cmd_set = {'zzz', 'trk', 'trl', 'nxt', 'prv', 'rst', 'vol', 'stp', 'ply'}
+            - format is: 'cmd p0 p1 ...' or 'cmd, p0, p1, ...'
+        """
+        cmd_set = {'zzz', 'trk', 'nxt', 'prv', 'rst', 'vol', 'stp', 'ply'}
         for line in commands_:
             await player.cmd_h.track_end_ev.wait()
             cmd_, params = parse_command(line)
@@ -48,7 +51,7 @@ async def main():
                 if cmd_ == 'zzz':
                     await player.track_end_ev.wait()
                     await asyncio.sleep(params[0])
-                elif cmd_ == 'trk' or cmd_ == 'trl':
+                elif cmd_ == 'trk':
                     await player.play_trk_list(params)
                 elif cmd_ == 'nxt':
                     await player.next_track()

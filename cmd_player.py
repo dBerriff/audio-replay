@@ -1,4 +1,4 @@
-# dfp_player.py
+# cmd_player.py
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
@@ -6,7 +6,7 @@ from dfp_player import DfPlayer
 
 
 class CmdPlayer(DfPlayer):
-    """ play tracks under simple command control """
+    """ extend CmdPlayer: additional playback commands and track index """
 
     def __init__(self, command_h_):
         super().__init__(command_h_)

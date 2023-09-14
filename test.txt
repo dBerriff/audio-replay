@@ -1,11 +1,11 @@
-# test file for cmd_player.py
+# test commands for cmd_player.py
 vol 5
 trk 79
-trl 76  9  25
+trk 76, 9,  25
 zzz 2
-trl 76 75
+trk 76,75
 zzz 2
-trl 1
+trk 1
 nxt
 nxt
 prv
