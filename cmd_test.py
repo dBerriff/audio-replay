@@ -5,10 +5,29 @@
 """
 
 import uasyncio as asyncio
+import machine
+from dfp_support import Led
 from data_link import DataLink
 from dfp_mini import DfpMiniControl
 from cmd_player import CmdPlayer
 from uqueue import Buffer
+
+
+class LedFlash:
+    """ """
+    
+    def __init__(self, adc_pin_, led_pin_):
+        self.adc = machine.ADC(adc_pin_)
+        self.led = Led(led_pin_)
+
+    async def poll_input(self):
+        """ """
+        ref_u16 = 25_000
+        while True:
+            await asyncio.sleep_ms(100)
+            input_ = self.adc.read_u16()
+            if input_ > ref_u16:
+                await self.led.flash(min((input_ - ref_u16), 500))
 
 
 async def main():
@@ -73,9 +92,16 @@ async def main():
         ext_player = CmdPlayer(cmd_handler)
         return ext_player
 
-    # UART pins
+    # pins
+    # UART
     tx_pin = 0
     rx_pin = 1
+    # ADC
+    adc_pin = 26
+    led_pin = 'LED'
+    
+    adc = LedFlash(adc_pin, led_pin)
+    asyncio.create_task(adc.poll_input())
 
     player = build_player(tx_pin, rx_pin)
     await player.startup()
@@ -88,6 +114,7 @@ async def main():
     # additional commands can now be run
     # await player.play_track_after(77)
     player.cmd_h.print_player_settings()
+    adc.led.turn_off()
 
 
 if __name__ == '__main__':

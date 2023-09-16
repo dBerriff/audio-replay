@@ -18,6 +18,13 @@ class Led:
         self.led = Pin(pin, Pin.OUT, value=0)
         self.led.off()
 
+    async def flash(self, ms_):
+        """ coro: flash the LED """
+        self.led.on()
+        await asyncio.sleep_ms(ms_)
+        self.led.off()
+        await asyncio.sleep_ms(ms_)
+
     async def blink(self, n):
         """ coro: blink the LED n times """
         for _ in range(n):
@@ -25,6 +32,10 @@ class Led:
             self.led.on()
             await asyncio.sleep_ms(100)
             self.led.off()
+
+    def turn_off(self):
+        """ """
+        self.led.off()
             
 
 class ConfigFile:
