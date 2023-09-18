@@ -2,11 +2,63 @@
 """
     DFPlayer Mini (DFP): device specific code
     See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for documentation.
-    Some DFP commands not supported or buggy - code alternatives implemented.
+    Some DFP mini commands do not work, so not included.
 """
 
 import uasyncio as asyncio
-import hex_fns as hex_f
+import struct
+
+
+class CmdPackUnpack:
+    """ DFPlayer mini command pack/unpack
+        - see Python struct documentation for 'format' characters
+        - command format:
+          start-B, ver-B, len-B, cmd-B, fb-B, param-H, csum-H, end-B
+    """
+    CMD_TEMPLATE = (0x7E, 0xFF, 0x06, 0x00, 0x01, 0x0000, 0x0000, 0xEF)
+    CMD_FORMAT = const('>BBBBBHHB')  # > big-endian
+    # command indices
+    CMD_I = const(3)
+    PRM_I = const(5)
+    CSM_I = const(6)
+    # byte-array indices
+    CSM_M = const(7)
+    CSM_L = const(8)
+
+    @classmethod
+    def get_checksum(cls, message_):
+        """ 2's comp. checksum of bytes 1 to parameter inclusive """
+        tx_bytes = struct.pack(cls.CMD_FORMAT, *message_)
+        return -sum(tx_bytes[1:cls.CSM_M]) & 0xffff
+
+    @classmethod
+    def check_checksum(cls, bytes_):
+        """ returns True if checksum is valid """
+        checksum = sum(bytes_[1:cls.CSM_M])
+        checksum += (bytes_[cls.CSM_M] << 8) + bytes_[cls.CSM_L]
+        return checksum & 0xffff == 0
+
+    def __init__(self):
+        self.tx_message = list(CmdPackUnpack.CMD_TEMPLATE)
+
+    def pack_tx_ba(self, command, parameter):
+        """ pack Tx DFPlayer mini command """
+        self.tx_message[self.CMD_I] = command
+        self.tx_message[self.PRM_I] = parameter
+        self.tx_message[self.CSM_I] = self.get_checksum(self.tx_message)
+        return struct.pack(self.CMD_FORMAT, *self.tx_message)
+    
+    def unpack_rx_ba(self, byte_array):
+        """ unpack Rx DFPlayer mini command """
+        if self.check_checksum(byte_array):
+            rx_message = struct.unpack(self.CMD_FORMAT, byte_array)
+            cmd_ = rx_message[self.CMD_I]
+            param_ = rx_message[self.PRM_I]
+        else:
+            print('Error in checksum')
+            cmd_ = 0
+            param_ = 0
+        return cmd_, param_
 
 
 class DfpMiniCh:
@@ -35,29 +87,13 @@ class DfpMiniCh:
     C_M = const(7)  # checksum
     C_L = const(8)
     VOL_MAX = const(30)
-    # bytearray template: set to require ACK response
-    BA_TEMPLATE = [0x7E, 0xFF, 0x06, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xEF]
-
     # settings dictionaries
     eq_val = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
     val_eq = {value: key for key, value in eq_val.items()}
 
-    @classmethod
-    def get_checksum(cls, word_):
-        """ 2's comp. checksum of bytes 1 to parameter-bytes inclusive """
-        return -sum(word_[1:cls.CS_U]) & 0xffff
-
-    @classmethod
-    def check_checksum(cls, word_):
-        """ returns True if checksum is valid """
-        byte_sum = sum(word_[1:cls.CS_U])
-        checksum = (word_[cls.C_M] << 8) + word_[cls.C_L]
-        return (byte_sum + checksum) & 0xffff == 0
-
     def __init__(self, data_link_):
         self._data_link = data_link_
         self.stream_tx_rx = self._data_link.stream_tx_rx
-        self.tx_ba = bytearray(self.BA_TEMPLATE)
         self.tx_queue = self._data_link.tx_queue
         self.rx_queue = self._data_link.rx_queue
         self._rx_cmd = 0x00  # for testing
@@ -71,18 +107,17 @@ class DfpMiniCh:
         self.error_ev = asyncio.Event()  # not currently monitored
         self.query_rx_ev = asyncio.Event()
         self.tx_lock = asyncio.Lock()
+        
+        self.cmd_ba = CmdPackUnpack()
         asyncio.create_task(self.consume_rx_data())
 
-    async def _send_command(self, cmd, param=0):
+    async def _send_command(self, cmd_, param_=0):
         """ coro: load tx bytearray word and send
             - lock against multiple attempts to send
         """
         async with self.tx_lock:
             self.ack_ev.clear()
-            self.tx_ba[self.CMD] = cmd
-            self.tx_ba[self.P_M], self.tx_ba[self.P_L] = hex_f.slice_reg16(param)
-            self.tx_ba[self.C_M], self.tx_ba[self.C_L] = hex_f.slice_reg16(self.get_checksum(self.tx_ba))
-            await self.tx_queue.put(self.tx_ba)
+            await self.tx_queue.put(self.cmd_ba.pack_tx_ba(cmd_, param_))
             await self.ack_ev.wait()  # wait for DFPlayer ACK
             await asyncio.sleep_ms(20)  # DFP recovery time?
 
@@ -92,12 +127,6 @@ class DfpMiniCh:
         self.query_rx_ev.clear()
         await self._send_command(self.qry_cmds[query])
         await self.query_rx_ev.wait()
-
-    def parse_rx_message(self, message):
-        """ parse incoming message to cmd and params """
-        rx_cmd = message[self.CMD]
-        rx_param = hex_f.m_l_reg16(message[self.P_M], message[self.P_L])
-        return rx_cmd, rx_param
 
     def evaluate_rx_message(self, rx_cmd, rx_param):
         """ evaluate incoming command for required action or errors """
@@ -131,11 +160,8 @@ class DfpMiniCh:
         """ coro: consume, parse and evaluate received bytearray """
         while True:
             await self.rx_queue.is_data.wait()
-            rx_ba = await self.rx_queue.get()
-            if not self.check_checksum(rx_ba):
-                print(f'{hex_f.byte_array_str(rx_ba)}: checksum error')
-                continue
-            self._rx_cmd, self._rx_param = self.parse_rx_message(rx_ba)
+            ba_ = await self.rx_queue.get()
+            self._rx_cmd, self._rx_param = self.cmd_ba.unpack_rx_ba(ba_)
             self.evaluate_rx_message(self._rx_cmd, self._rx_param)
 
     def print_player_settings(self):
