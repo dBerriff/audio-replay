@@ -2,18 +2,18 @@
 """
     DFPlayer Mini (DFP): device specific code
     See https://www.flyrontech.com/en/product/fn-m16p-mp3-module.html for documentation.
-    Some DFP mini commands do not work, so not included.
+    Some DFP mini commands do not work so are implemented in software.
 """
 
 import uasyncio as asyncio
 import struct
+from dfp_support import ConfigFile
 
 
 class CmdPackUnpack:
-    """ DFPlayer mini command pack/unpack
-        - see Python struct documentation for 'format' characters
-        - command format:
-          start-B, ver-B, len-B, cmd-B, fb-B, param-H, csum-H, end-B
+    """ DFPlayer mini command pack/unpack: command values <-> message bytes
+        - unsigned integers: B: 1 byte; H: 2 bytes
+          command: start-B, ver-B, len-B, cmd-B, fb-B, param-H, csum-H, end-B
     """
     CMD_TEMPLATE = (0x7E, 0xFF, 0x06, 0x00, 0x01, 0x0000, 0x0000, 0xEF)
     CMD_FORMAT = const('>BBBBBHHB')  # > big-endian
@@ -21,15 +21,9 @@ class CmdPackUnpack:
     CMD_I = const(3)
     PRM_I = const(5)
     CSM_I = const(6)
-    # byte-array indices
+    # message indices
     CSM_M = const(7)
     CSM_L = const(8)
-
-    @classmethod
-    def get_checksum(cls, message_):
-        """ 2's comp. checksum of bytes 1 to parameter inclusive """
-        tx_bytes = struct.pack(cls.CMD_FORMAT, *message_)
-        return -sum(tx_bytes[1:cls.CSM_M]) & 0xffff
 
     @classmethod
     def check_checksum(cls, bytes_):
@@ -45,15 +39,17 @@ class CmdPackUnpack:
         """ pack Tx DFPlayer mini command """
         self.tx_message[self.CMD_I] = command
         self.tx_message[self.PRM_I] = parameter
-        self.tx_message[self.CSM_I] = self.get_checksum(self.tx_message)
+        bytes_ = struct.pack(self.CMD_FORMAT, *self.tx_message)
+        # compute checksum
+        self.tx_message[self.CSM_I] = -sum(bytes_[1:self.CSM_M]) & 0xffff
         return struct.pack(self.CMD_FORMAT, *self.tx_message)
     
-    def unpack_rx_ba(self, byte_array):
+    def unpack_rx_ba(self, bytes_):
         """ unpack Rx DFPlayer mini command """
-        if self.check_checksum(byte_array):
-            rx_message = struct.unpack(self.CMD_FORMAT, byte_array)
-            cmd_ = rx_message[self.CMD_I]
-            param_ = rx_message[self.PRM_I]
+        if self.check_checksum(bytes_):
+            rx_msg = struct.unpack(self.CMD_FORMAT, bytes_)
+            cmd_ = rx_msg[self.CMD_I]
+            param_ = rx_msg[self.PRM_I]
         else:
             print('Error in checksum')
             cmd_ = 0
@@ -68,9 +64,9 @@ class DfpMiniCh:
         - rx messages are received through rx_queue
     """
 
-    config = {'name': 'DFPlayer Mini',
-              'vol_factor': 3,
-              'vol': 5,
+    _config = {'name': 'DFPlayer Mini',
+              'vol_factor': 3,  # 0 - 30
+              'vol': 15,
               'eq': 'normal'
               }
     qry_cmds = {'vol': 0x43,
@@ -78,8 +74,8 @@ class DfpMiniCh:
                 'sd_files': 0x48,
                 'sd_track': 0x4c
                 }
-    BA_SIZE = const(10)  # bytearray
-    # data-byte indices
+    MESSAGE_SIZE = const(10)  # bytes
+    # message-byte indices
     CMD = const(3)
     P_M = const(5)  # parameter
     P_L = const(6)
@@ -87,29 +83,47 @@ class DfpMiniCh:
     C_M = const(7)  # checksum
     C_L = const(8)
     VOL_MAX = const(30)
+    CONFIG_FILENAME = const('config.json')
+
     # settings dictionaries
     eq_val = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
     val_eq = {value: key for key, value in eq_val.items()}
 
     def __init__(self, data_link_):
-        self._data_link = data_link_
-        self.stream_tx_rx = self._data_link.stream_tx_rx
-        self.tx_queue = self._data_link.tx_queue
-        self.rx_queue = self._data_link.rx_queue
-        self._rx_cmd = 0x00  # for testing
-        self._rx_param = 0x0000  # for testing
-        self.vol = 0
-        self.eq = 'normal'
+        # self._data_link = data_link_
+        self.stream_tx_rx = data_link_.stream_tx_rx
+        self.tx_queue = data_link_.tx_queue
+        self.rx_queue = data_link_.rx_queue
+        self.cmd_bytes = CmdPackUnpack()
+        self.rx_cmd = 0x00
+        self.rx_param = 0x0000
+        self.cf = ConfigFile(self.CONFIG_FILENAME)
+        self.config = self.get_config()
         self.track_count = 0
         self.track = 0
         self.ack_ev = asyncio.Event()
         self.track_end_ev = asyncio.Event()
         self.error_ev = asyncio.Event()  # not currently monitored
-        self.query_rx_ev = asyncio.Event()
         self.tx_lock = asyncio.Lock()
-        
-        self.cmd_ba = CmdPackUnpack()
         asyncio.create_task(self.consume_rx_data())
+
+    def get_config(self):
+        """ initialise config from file or set to defaults
+            - write config file if it does not exist
+        """
+        if self.cf.is_file():
+            print('Config file found')
+            config = self.cf.read_file()
+        else:
+            print('Config file not found')
+            config = DfpMiniCh._config
+            self.cf.write_file(config)
+        print(config)
+        return config
+
+    def save_config(self):
+        """ save config settings """
+        self.cf.write_file(self.config)
 
     async def _send_command(self, cmd_, param_=0):
         """ coro: load tx bytearray word and send
@@ -117,43 +131,37 @@ class DfpMiniCh:
         """
         async with self.tx_lock:
             self.ack_ev.clear()
-            await self.tx_queue.put(self.cmd_ba.pack_tx_ba(cmd_, param_))
+            await self.tx_queue.put(self.cmd_bytes.pack_tx_ba(cmd_, param_))
             await self.ack_ev.wait()  # wait for DFPlayer ACK
             await asyncio.sleep_ms(20)  # DFP recovery time?
 
     async def send_query(self, query):
-        """ send query and wait for response event
+        """ send query
             - 'vol', 'eq', 'sd_files', 'sd_track' """
-        self.query_rx_ev.clear()
         await self._send_command(self.qry_cmds[query])
-        await self.query_rx_ev.wait()
 
-    def evaluate_rx_message(self, rx_cmd, rx_param):
+    def evaluate_rx_message(self, rx_cmd_, rx_param_):
         """ evaluate incoming command for required action or errors """
-        if rx_cmd == 0x41:  # ack
+        if rx_cmd_ == 0x41:  # ack
             self.ack_ev.set()
-        elif rx_cmd == 0x3d:  # sd track finished
+        elif rx_cmd_ == 0x3d:  # sd track finished
             self.track_end_ev.set()
-        elif rx_cmd == 0x3f:  # qry_init
-            if (rx_param & 0x0002) != 0x0002:
+        elif rx_cmd_ == 0x3f:  # qry_init
+            if (rx_param_ & 0x0002) != 0x0002:
                 raise Exception('DFPlayer error: no SD-card?')
-        elif rx_cmd == 0x40:  # error
+        elif rx_cmd_ == 0x40:  # error
             self.error_ev.set()  # not currently monitored
-        elif rx_cmd == 0x43:  # qry_vol
-            self.vol = rx_param
-            self.query_rx_ev.set()
-        elif rx_cmd == 0x44:  # qry_eq
-            self.eq = self.val_eq[rx_param]
-            self.query_rx_ev.set()
-        elif rx_cmd == 0x48:  # qry_sd_files
-            self.track_count = rx_param
-            self.query_rx_ev.set()
-        elif rx_cmd == 0x4c:  # qry_sd_trk
-            self.track = rx_param
-            self.query_rx_ev.set()
-        elif rx_cmd == 0x3a:  # media_insert
+        elif rx_cmd_ == 0x43:  # qry_vol
+            self.config['vol'] = rx_param_
+        elif rx_cmd_ == 0x44:  # qry_eq
+            self.config['eq'] = self.val_eq[rx_param_]
+        elif rx_cmd_ == 0x48:  # qry_sd_files
+            self.track_count = rx_param_
+        elif rx_cmd_ == 0x4c:  # qry_sd_trk
+            self.track = rx_param_
+        elif rx_cmd_ == 0x3a:  # media_insert
             print('SD-card inserted.')
-        elif rx_cmd == 0x3b:  # media_remove
+        elif rx_cmd_ == 0x3b:  # media_remove
             raise Exception('DFPlayer error: SD-card removed!')
 
     async def consume_rx_data(self):
@@ -161,24 +169,24 @@ class DfpMiniCh:
         while True:
             await self.rx_queue.is_data.wait()
             ba_ = await self.rx_queue.get()
-            self._rx_cmd, self._rx_param = self.cmd_ba.unpack_rx_ba(ba_)
-            self.evaluate_rx_message(self._rx_cmd, self._rx_param)
+            self.rx_cmd, self.rx_param = self.cmd_bytes.unpack_rx_ba(ba_)
+            self.evaluate_rx_message(self.rx_cmd, self.rx_param)
 
-    def print_player_settings(self):
+    def player_config(self):
         """ print selected player settings """
         result = f'player: {self.config["name"]}, '
-        result += f'track: {self.track}, '
-        result += f'vol: {self.vol}, '
-        result += f'vol_factor: {self.config["vol_factor"]}, '
-        result += f'eq: {self.eq}'
-        print(result)
+        result += f'vol: {self.config["vol"]}, '
+        result += f'eq: {self.config["eq"]}'
+        return result
 
 
 class DfpMiniControl(DfpMiniCh):
-    """ DFPlayer Mini control methods """
+    """ Extends DFPlayer Mini with control methods """
 
     def __init__(self, data_link_):
         super().__init__(data_link_)
+        self.set_vol(self.config['vol'])
+        self.set_eq(self.config['eq'])
 
     async def reset(self):
         """ coro: reset the DFPlayer
@@ -186,8 +194,8 @@ class DfpMiniControl(DfpMiniCh):
         """
         await self._send_command(0x0c, 0)
         await asyncio.sleep_ms(2000)  # allow time for the DFPlayer reset
-        if self._rx_cmd != 0x3f:
-            if self._rx_cmd == 0x41:
+        if self.rx_cmd != 0x3f:
+            if self.rx_cmd == 0x41:
                 raise Exception(f'DFPlayer ACK with error: no SD card?')
             else:
                 raise Exception('DFPlayer no ACK.')
@@ -209,30 +217,12 @@ class DfpMiniControl(DfpMiniCh):
     async def set_vol(self, level):
         """ coro: set volume level 0-VOL_MAX """
         await self._send_command(0x06, level)
-        self.vol = level
+        self.config['vol'] = level
 
     async def set_eq(self, eq_key):
         """ set eq to key in:
             'normal', 'pop', 'rock', 'jazz', 'classic', 'bass'
         """
-        await self._send_command(0x07, self.eq_val[eq_key])
-        self.eq = eq_key
-    
-
-async def main():
-    """"""
-    from data_link import DataLink
-    from uqueue import Buffer
-
-    tx_queue = Buffer()
-    rx_queue = Buffer()
-    data_link = DataLink(0, 1, 9600, 10, tx_queue, rx_queue)
-    cmd_handler = DfpMiniControl(data_link)
-    print(cmd_handler)
-
-if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    finally:
-        asyncio.new_event_loop()  # clear retained state
-        print('test complete')
+        if eq_key in self.eq_val:
+            await self._send_command(0x07, self.eq_val[eq_key])
+            self.config['eq'] = eq_key

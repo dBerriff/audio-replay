@@ -2,7 +2,6 @@
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
-from dfp_support import ConfigFile
 
 
 class DfPlayer:
@@ -15,134 +14,69 @@ class DfPlayer:
     VOL_MAX = const(10)
 
     def __init__(self, command_h_):
-        self.cmd_h = command_h_
-        self.vol_factor = None
-        self.eq_val = self.cmd_h.eq_val
+        self.command_h = command_h_
+        # initial configuration
+        self.config = command_h_.config
+        self.track_count = self.command_h.track_count
+        self.vol_factor = command_h_.config['vol_factor']
+        self.vol = command_h_.config['vol'] // self.vol_factor
+        self.player_config = command_h_.player_config
+        self.track_end_ev = self.command_h.track_end_ev
+        self.track_end_ev.set()  # no track playing yet
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
-        self.config_file = ConfigFile('config.json')
-        self.config = {}
-        self.init_config()
-        self.track_count = 0
-        self.track_end_ev = self.cmd_h.track_end_ev
-        self.track_end_ev.set()  # no track playing yet
-        self.qry_keys = self.cmd_h.qry_cmds.keys()
-        self.pause = self.cmd_h.pause
-        self.play = self.cmd_h.play
-
-    @property
-    def vol(self):
-        return self.cmd_h.vol // self.vol_factor
-    
-    @vol.setter
-    def vol(self, value):
-        self.cmd_h.vol = value * self.vol_factor
-    
-    @property
-    def eq(self):
-        return self.cmd_h.eq
-    
-    @eq.setter
-    def eq(self, value):
-        self.cmd_h.eq = value
 
     async def reset(self):
         """ reset player including track_count """
-        await self.cmd_h.reset()
-        await self.cmd_h.send_query('sd_files')
-        self.track_count = self.cmd_h.track_count
-    
-    # config methods
-
-    def init_config(self):
-        """ initialise config from file or set to defaults
-            - write config file if it does not exist
-        """
-        if self.config_file.is_file():
-            self.config = self.config_file.read_file()
-        else:
-            self.config = self.cmd_h.config
-            self.config_file.write_file(self.config)
-        self.vol_factor = self.config['vol_factor']
-        self.vol = self.config['vol']
-        self.eq = self.config['eq']
-
-    def save_config(self):
-        """ save config settings """
-        self.config['vol'] = self.vol
-        self.config['eq'] = self.eq
-        self.config_file.write_file(self.config)
-
-    async def startup(self):
-        """ player startup sequence
-            - response should be: (0x3f, 0x02)
-        """
-        await self.reset()
-        await asyncio.sleep_ms(200)
-        await self.set_vol(self.config['vol'])
-        await self.set_eq(self.config['eq'])
+        await self.command_h.reset()
         await self.send_query('sd_files')
+        self.track_count = self.command_h.track_count
+        await asyncio.sleep_ms(200)
 
     # player methods
 
     async def play_track(self, track):
-        """ coro: play track after previous track """
+        """ play track after previous track """
         if self.START_TRACK <= track <= self.track_count:
-            await self.cmd_h.play_track(track)
+            await self.command_h.play_track(track)
 
     async def play_track_after(self, track):
-        """ coro: play track after previous track """
-        await self.cmd_h.track_end_ev.wait()
+        """ play track after previous track finishes """
+        await self.command_h.track_end_ev.wait()
         await self.play_track(track)
 
     async def set_vol(self, level):
-        """ coro: set volume level """
-        self.vol = min(self.VOL_MAX, level)
-        self.vol = max(0, level)
-        await self.cmd_h.set_vol(self.vol * self.vol_factor)
+        """ set volume level """
+        vol = min(self.VOL_MAX, level)
+        vol = max(0, vol)
+        await self.command_h.set_vol(vol * self.vol_factor)
     
     async def dec_vol(self):
         """ decrement volume by 1 unit """
         if self.vol > 0:
             self.vol -= 1
-            await self.cmd_h.set_vol(self.vol * self.vol_factor)
+            await self.command_h.set_vol(self.vol * self.vol_factor)
 
     async def inc_vol(self):
         """ increment volume by 1 unit """
         if self.vol < self.VOL_MAX:
             self.vol += 1
-            await self.cmd_h.set_vol(self.vol * self.vol_factor)
+            await self.command_h.set_vol(self.vol * self.vol_factor)
 
-    async def set_eq(self, setting):
-        """ coro: set eq to preset """
-        if setting in self.eq_val:
-            self.eq = setting
-            await self.cmd_h.set_eq(self.eq)
+    async def set_eq(self, eq_type):
+        """ set eq type """
+        await self.command_h.set_eq(eq_type)
 
     async def send_query(self, query):
         """ send query and wait for response event
             - 'vol', 'eq', 'sd_files', 'sd_track' """
-        if query in self.qry_keys:
-            await self.cmd_h.send_query(query)
+        if query in self.command_h.qry_cmds:
+            await self.command_h.send_query(query)
             if query == 'vol':
-                print(f'Query vol: {self.vol}')
+                print(f'Query vol: {self.command_h.config["vol"] // self.vol_factor}')
             elif query == 'eq':
-                print(f'Query eq: {self.eq}')
-            elif query == 'sd_tracks':
-                pass
+                print(f'Query eq: {self.command_h.config["eq"]}')
+            elif query == 'sd_files':
+                print(f'Query track count: {self.command_h.track_count}')
             elif query == 'sd_track':
-                pass
-
-
-async def main():
-    """"""
-    print('In main()')
-
-
-if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    finally:
-        asyncio.new_event_loop()  # clear retained state
-        print('test complete')
-        
+                print(f'Query current track: {self.command_h.track}')

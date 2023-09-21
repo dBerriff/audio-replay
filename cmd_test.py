@@ -14,7 +14,7 @@ from uqueue import Buffer
 
 
 class LedFlash:
-    """ """
+    """ flash LED if ADC threshold exceeded """
     
     def __init__(self, adc_pin_, led_pin_):
         self.adc = machine.ADC(adc_pin_)
@@ -63,7 +63,7 @@ async def main():
         """
         cmd_set = {'zzz', 'trk', 'nxt', 'prv', 'rst', 'vol', 'stp', 'ply'}
         for line in commands_:
-            await player.cmd_h.track_end_ev.wait()
+            await player.command_h.track_end_ev.wait()
             cmd_, params = parse_command(line)
             if cmd_ in cmd_set:
                 print(cmd_, params)
@@ -81,16 +81,15 @@ async def main():
                 elif cmd_ == 'vol':
                     await player.set_vol(params[0])
                 elif cmd_ == 'stp':
-                    await player.pause()
+                    await player.ch_pause()
                 elif cmd_ == 'ply':
-                    await player.play()
+                    await player.ch_play()
 
     def build_player(tx_p, rx_p):
         """ build player from components """
         data_link = DataLink(tx_p, rx_p, 9600, 10, Buffer(), Buffer())
         cmd_handler = DfpMiniControl(data_link)
-        ext_player = CmdPlayer(cmd_handler)
-        return ext_player
+        return CmdPlayer(cmd_handler)
 
     # pins
     # UART
@@ -100,21 +99,25 @@ async def main():
     adc_pin = 26
     led_pin = 'LED'
     
-    adc = LedFlash(adc_pin, led_pin)
-    asyncio.create_task(adc.poll_input())
+    # adc = LedFlash(adc_pin, led_pin)
+    # asyncio.create_task(adc.poll_input())
 
     player = build_player(tx_pin, rx_pin)
-    await player.startup()
-    print(f"{player.config['name']}: configuration file loaded")
+    print(f"{player.config['name']} loaded")
+    await player.reset()
+    await player.set_vol(5)
+    await player.send_query('eq')
     print(f'Number of SD tracks: {player.track_count}')
     print('Run commands')
     commands = get_command_script('test.txt')
     await run_commands(commands)
     await player.track_end_ev.wait()
-    # additional commands can now be run
-    # await player.play_track_after(77)
-    player.cmd_h.print_player_settings()
-    adc.led.turn_off()
+    await player.send_query('vol')
+    await player.send_query('eq')
+    await player.send_query('sd_files')
+    await player.send_query('sd_track')
+    print(f'Config: {player.player_config()}')
+    # adc.led.turn_off()
 
 
 if __name__ == '__main__':

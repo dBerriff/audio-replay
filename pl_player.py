@@ -23,7 +23,7 @@ class PlPlayer(DfPlayer):
 
     def build_playlist(self, shuffled=False):
         """ shuffle playlist track sequence """
-        self._playlist = [i + 1 for i in range(self.track_count)]
+        self._playlist = [i + 1 for i in range(self.ch_track_count)]
         if shuffled:
             self._playlist = shuffle(self._playlist)
         self._playlist.insert(0, 0)
@@ -38,15 +38,8 @@ class PlPlayer(DfPlayer):
     async def next_pl_track(self):
         """ coro: play next track """
         self._pl_track_index += 1
-        if self._pl_track_index > self.track_count:
+        if self._pl_track_index > self.ch_track_count:
             self._pl_track_index = self.START_TRACK
-        await self.play_pl_track(self._pl_track_index)
-
-    async def prev_pl_track(self):
-        """ coro: play previous track """
-        self._pl_track_index -= 1
-        if self._pl_track_index < self.START_TRACK:
-            self._pl_track_index = self.track_count
         await self.play_pl_track(self._pl_track_index)
 
     async def play_playlist(self):

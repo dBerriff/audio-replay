@@ -20,7 +20,7 @@ class CmdPlayer(DfPlayer):
     async def next_track(self):
         """ coro: play next track """
         self._track_index += 1
-        if self._track_index > self.track_count:
+        if self._track_index > self.command_h.track_count:
             self._track_index = self.START_TRACK
         await self.play_track_after(self._track_index)
 
@@ -28,7 +28,7 @@ class CmdPlayer(DfPlayer):
         """ coro: play previous track """
         self._track_index -= 1
         if self._track_index < self.START_TRACK:
-            self._track_index = self.track_count
+            self._track_index = self.command_h.track_count
         await self.play_track_after(self._track_index)
 
 

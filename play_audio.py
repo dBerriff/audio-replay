@@ -177,7 +177,7 @@ class AudioPlayer:
         s_button = self.skip_button
         while self._audio_channel.playing:
             if s_button and s_button.get_state() == 1:
-                self._audio_channel.pause()
+                self._audio_channel.ch_pause()
 
     def wait_button_press(self):
         """ wait for a button to be pressed
@@ -216,7 +216,7 @@ class AudioPlayer:
             return
         if self.print_f_name:
             print(f'playing: {filename}')
-        self._audio_channel.play(stream)
+        self._audio_channel.ch_play(stream)
 
     def play_all_files(self):
         """ play all audio files """
