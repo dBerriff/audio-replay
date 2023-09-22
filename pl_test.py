@@ -27,7 +27,6 @@ async def main():
         cmd_handler = DfpMini(data_link)
         return PlPlayer(cmd_handler)
 
-
     # pins
     # UART
     tx_pin = 0
