@@ -9,7 +9,7 @@ import machine
 from dfp_support import Led
 from data_link import DataLink
 from dfp_mini import DfpMiniControl
-from cmd_player import CmdPlayer
+from dfp_player import DfPlayer
 from uqueue import Buffer
 
 
@@ -89,7 +89,7 @@ async def main():
         """ build player from components """
         data_link = DataLink(tx_p, rx_p, 9600, 10, Buffer(), Buffer())
         cmd_handler = DfpMiniControl(data_link)
-        return CmdPlayer(cmd_handler)
+        return DfPlayer(cmd_handler)
 
     # pins
     # UART
@@ -103,20 +103,14 @@ async def main():
     # asyncio.create_task(adc.poll_input())
 
     player = build_player(tx_pin, rx_pin)
-    print(f"{player.config['name']} loaded")
     await player.reset()
-    await player.set_vol(5)
+    await player.send_query('vol')
     await player.send_query('eq')
-    print(f'Number of SD tracks: {player.track_count}')
     print('Run commands')
     commands = get_command_script('test.txt')
     await run_commands(commands)
     await player.track_end_ev.wait()
-    await player.send_query('vol')
-    await player.send_query('eq')
-    await player.send_query('sd_files')
-    await player.send_query('sd_track')
-    print(f'Config: {player.player_config()}')
+    player.save_config()
     # adc.led.turn_off()
 
 

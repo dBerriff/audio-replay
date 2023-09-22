@@ -43,7 +43,7 @@ class CmdPackUnpack:
         # compute checksum
         self.tx_message[self.CSM_I] = -sum(bytes_[1:self.CSM_M]) & 0xffff
         return struct.pack(self.CMD_FORMAT, *self.tx_message)
-    
+
     def unpack_rx_ba(self, bytes_):
         """ unpack Rx DFPlayer mini command """
         if self.check_checksum(bytes_):
@@ -62,13 +62,15 @@ class DfpMiniCh:
         - N.B. 'reset' must be called to initialise object
         - tx messages are directly sent
         - rx messages are received through rx_queue
+        - config is set from file config.json or _config
+        - config.json must be explicitly saved if values are changed
     """
 
     _config = {'name': 'DFPlayer Mini',
-              'vol_factor': 3,  # 0 - 30
-              'vol': 15,
-              'eq': 'normal'
-              }
+               'vol_factor': 3,  # 0 - 30
+               'vol': 15,
+               'eq': 'normal'
+               }
     qry_cmds = {'vol': 0x43,
                 'eq': 0x44,
                 'sd_files': 0x48,
@@ -120,7 +122,23 @@ class DfpMiniCh:
 
     def save_config(self):
         """ save config settings """
-        self.cf.write_file(self.config)
+        do_update = False
+        if self.cf.is_file():
+            prev_config = self.cf.read_file()
+            if self.config != prev_config:
+                do_update = True
+        else:
+            do_update = True
+        if do_update:
+            print(f'Saving config: {self.config}')
+            self.cf.write_file(self.config)
+
+    def player_config_str(self):
+        """ return player config as str """
+        result = f'player: {self.config["name"]}, '
+        result += f'vol: {self.config["vol"]}, '
+        result += f'eq: {self.config["eq"]}'
+        return result
 
     async def _send_command(self, cmd_, param_=0):
         """ load tx bytearray word and send
@@ -169,21 +187,12 @@ class DfpMiniCh:
             self.rx_cmd, self.rx_param = self.cmd_bytes.unpack_rx_ba(ba_)
             self.evaluate_rx_message(self.rx_cmd, self.rx_param)
 
-    def player_config(self):
-        """ return player config as str """
-        result = f'player: {self.config["name"]}, '
-        result += f'vol: {self.config["vol"]}, '
-        result += f'eq: {self.config["eq"]}'
-        return result
-
 
 class DfpMiniControl(DfpMiniCh):
     """ Extends DFPlayer Mini with control methods """
 
     def __init__(self, data_link_):
         super().__init__(data_link_)
-        self.set_vol(self.config['vol'])
-        self.set_eq(self.config['eq'])
 
     async def reset(self):
         """ coro: reset the DFPlayer
@@ -211,15 +220,10 @@ class DfpMiniControl(DfpMiniCh):
         """ pause/stop playing """
         await self._send_command(0x0e, 0)
 
-    async def set_vol(self, level):
+    async def set_vol(self):
         """ set volume 0 - VOL_MAX """
-        level = min(level, self.VOL_MAX)
-        level = max(level, 0)
-        await self._send_command(0x06, level)
-        self.config['vol'] = level
+        await self._send_command(0x06, self.config['vol'])
 
-    async def set_eq(self, eq_key):
+    async def set_eq(self):
         """ set eq by name """
-        if eq_key in self.eq_val:
-            await self._send_command(0x07, self.eq_val[eq_key])
-            self.config['eq'] = eq_key
+        await self._send_command(0x07, self.eq_val[self.config['eq']])
