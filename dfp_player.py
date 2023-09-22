@@ -42,9 +42,9 @@ class DfPlayer:
 
     async def set_vol(self, level):
         """ set volume level """
-        vol = min(self.VOL_MAX, level)
-        vol = max(0, vol)
-        await self.command_h.set_vol(vol * self.vol_factor)
+        level = min(level, self.VOL_MAX)
+        level = max(level, 0)
+        await self.command_h.set_vol(level * self.vol_factor)
     
     async def dec_vol(self):
         """ decrement volume by 1 unit """
