@@ -22,12 +22,12 @@ class LedFlash:
 
     async def poll_input(self):
         """ """
-        ref_u16 = 25_000
+        ref_u16 = 25_400
         while True:
             await asyncio.sleep_ms(100)
-            input_ = self.adc.read_u16()
-            if input_ > ref_u16:
-                await self.led.flash(min((input_ - ref_u16), 500))
+            level_ = self.adc.read_u16()
+            if level_ > ref_u16:
+                asyncio.create_task(self.led.flash(min((level_ - ref_u16), 200)))
 
 
 async def main():
@@ -81,9 +81,9 @@ async def main():
                 elif cmd_ == 'vol':
                     await player.set_vol(params[0])
                 elif cmd_ == 'stp':
-                    await player.ch_pause()
+                    await player.command_h.pause()
                 elif cmd_ == 'ply':
-                    await player.ch_play()
+                    await player.command_h.ch_play()
 
     def build_player(tx_p, rx_p):
         """ build player from components """
@@ -99,8 +99,8 @@ async def main():
     adc_pin = 26
     led_pin = 'LED'
     
-    # adc = LedFlash(adc_pin, led_pin)
-    # asyncio.create_task(adc.poll_input())
+    adc = LedFlash(adc_pin, led_pin)
+    asyncio.create_task(adc.poll_input())
 
     player = build_player(tx_pin, rx_pin)
     await player.reset()
