@@ -1,4 +1,4 @@
-# dfp_player.py
+# df_player.py
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
@@ -16,22 +16,23 @@ class DfPlayer:
     def __init__(self, command_h_):
         self.command_h = command_h_
         self.save_config = command_h_.save_config
+        self.name = command_h_.config['name']
         self.vol_factor = command_h_.config['vol_factor']
         self.vol = command_h_.config['vol'] // self.vol_factor
         self.eq = command_h_.config['eq']
+        self.rx_cmd = 0x00
+        self.rx_param = 0x0000
         self._track_index = 1
         self.track_end_ev = self.command_h.track_end_ev
         self.track_end_ev.set()  # no track playing yet
-        self.rx_cmd = 0x00
-        self.rx_param = 0x0000
 
     async def reset(self):
         """ reset player including track_count """
         await self.command_h.reset()
         await self.send_query('sd_files')
         await asyncio.sleep_ms(200)
-        await self.command_h.set_vol()
-        await self.command_h.set_eq()
+        await self.command_h.set_config_vol()
+        await self.command_h.set_config_eq()
 
     # player methods
 
@@ -48,7 +49,7 @@ class DfPlayer:
     async def update_vol(self):
         """ set volume level """
         self.command_h.config['vol'] = self.vol * self.vol_factor
-        await self.command_h.set_vol()
+        await self.command_h.set_config_vol()
     
     async def set_vol(self, level_):
         """ set volume level """
@@ -71,7 +72,7 @@ class DfPlayer:
     async def update_eq(self):
         """ set volume level """
         self.command_h.config['eq'] = self.eq
-        await self.command_h.set_eq()
+        await self.command_h.set_config_eq()
 
     async def set_eq(self, eq_name):
         """ set eq by type str """

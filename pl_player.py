@@ -1,8 +1,8 @@
-# dfp_player.py
+# df_player.py
 """ Control DFPlayer Mini over UART """
 
 import uasyncio as asyncio
-from dfp_player import DfPlayer
+from df_player import DfPlayer
 from dfp_support import shuffle, Led
 
 
@@ -14,6 +14,7 @@ class PlPlayer(DfPlayer):
     def __init__(self, command_h_):
         super().__init__(command_h_)
         self._playlist = []
+        self._track_count = 0
         self._pl_track_index = self.START_TRACK
         self.led = Led('LED')
     
@@ -23,7 +24,8 @@ class PlPlayer(DfPlayer):
 
     def build_playlist(self, shuffled=False):
         """ shuffle playlist track sequence """
-        self._playlist = [i + 1 for i in range(self.ch_track_count)]
+        self._track_count = self.command_h.track_count
+        self._playlist = [i + 1 for i in range(self._track_count)]
         if shuffled:
             self._playlist = shuffle(self._playlist)
         self._playlist.insert(0, 0)
@@ -38,7 +40,7 @@ class PlPlayer(DfPlayer):
     async def next_pl_track(self):
         """ coro: play next track """
         self._pl_track_index += 1
-        if self._pl_track_index > self.ch_track_count:
+        if self._pl_track_index > self._track_count:
             self._pl_track_index = self.START_TRACK
         await self.play_pl_track(self._pl_track_index)
 
@@ -49,17 +51,17 @@ class PlPlayer(DfPlayer):
             await self.next_pl_track()
 
     async def dec_vol(self):
-        """ decrement volume - add blink LED """
+        """ decrement volume - blink value """
         if self.vol > 1:
             self.vol -= 1
-            await self.set_vol(self.vol)
+            await self.update_vol()
             asyncio.create_task(self.led.blink(self.vol))
 
     async def inc_vol(self):
-        """ increment volume - add blink LED """
+        """ increment volume - blink value """
         if self.vol < self.VOL_MAX:
             self.vol += 1
-            await self.set_vol(self.vol)
+            await self.update_vol()
             asyncio.create_task(self.led.blink(self.vol))
 
 

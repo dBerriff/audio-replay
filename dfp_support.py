@@ -4,7 +4,7 @@
     - events are set on button release
 """
 import uasyncio as asyncio
-from machine import Pin
+from machine import Pin, ADC
 from micropython import const
 from random import randint
 import json
@@ -17,6 +17,7 @@ class Led:
     def __init__(self, pin):
         self.led = Pin(pin, Pin.OUT, value=0)
         self.led.off()
+        self.blink_lock = asyncio.Lock()
 
     async def flash(self, ms_):
         """ coro: flash the LED """
@@ -27,16 +28,35 @@ class Led:
 
     async def blink(self, n):
         """ coro: blink the LED n times """
-        for _ in range(n):
-            await asyncio.sleep_ms(900)
-            self.led.on()
-            await asyncio.sleep_ms(100)
-            self.led.off()
+        async with self.blink_lock:
+            for _ in range(n):
+                await asyncio.sleep_ms(900)
+                self.led.on()
+                await asyncio.sleep_ms(100)
+                self.led.off()
+            await asyncio.sleep_ms(500)
 
     def turn_off(self):
         """ """
         self.led.off()
             
+
+class LedFlash:
+    """ flash LED if ADC threshold exceeded """
+    
+    def __init__(self, adc_pin_, led_pin_):
+        self.adc = ADC(adc_pin_)
+        self.led = Led(led_pin_)
+
+    async def poll_input(self):
+        """ """
+        ref_u16 = 25_400
+        while True:
+            await asyncio.sleep_ms(100)
+            level_ = self.adc.read_u16()
+            if level_ > ref_u16:
+                asyncio.create_task(self.led.flash(min((level_ - ref_u16), 200)))
+
 
 class ConfigFile:
     """ write and read json config files """
@@ -156,8 +176,7 @@ class DfpButtons:
             if button_.state == 1:
                 await self.inc_vol()
             elif button_.state == 2:
-                # await self.save_config()
-                pass
+                self.save_config()
             button_.press_ev.clear()
 
     async def dec_btn_pressed(self):
@@ -170,8 +189,7 @@ class DfpButtons:
             if button_.state == 1:
                 await self.dec_vol()
             elif button_.state == 2:
-                # await self.save_config()
-                pass
+                self.save_config()
             button_.press_ev.clear()
 
     def poll_buttons(self):
@@ -197,15 +215,3 @@ def shuffle(list_):
         j = randint(i, limit)  # inclusive range
         list_[i], list_[j] = list_[j], list_[i]
     return list_
-
-
-async def main():
-    """ test code, if any """
-    pass
-
-if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    finally:
-        asyncio.new_event_loop()  # clear retained state
-        print('execution complete')

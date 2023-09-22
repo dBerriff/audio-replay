@@ -5,29 +5,11 @@
 """
 
 import uasyncio as asyncio
-import machine
-from dfp_support import Led
+from dfp_support import LedFlash
 from data_link import DataLink
-from dfp_mini import DfpMiniControl
-from dfp_player import DfPlayer
+from dfp_mini import DfpMini
+from df_player import DfPlayer
 from uqueue import Buffer
-
-
-class LedFlash:
-    """ flash LED if ADC threshold exceeded """
-    
-    def __init__(self, adc_pin_, led_pin_):
-        self.adc = machine.ADC(adc_pin_)
-        self.led = Led(led_pin_)
-
-    async def poll_input(self):
-        """ """
-        ref_u16 = 25_400
-        while True:
-            await asyncio.sleep_ms(100)
-            level_ = self.adc.read_u16()
-            if level_ > ref_u16:
-                asyncio.create_task(self.led.flash(min((level_ - ref_u16), 200)))
 
 
 async def main():
@@ -88,7 +70,7 @@ async def main():
     def build_player(tx_p, rx_p):
         """ build player from components """
         data_link = DataLink(tx_p, rx_p, 9600, 10, Buffer(), Buffer())
-        cmd_handler = DfpMiniControl(data_link)
+        cmd_handler = DfpMini(data_link)
         return DfPlayer(cmd_handler)
 
     # pins
@@ -103,12 +85,16 @@ async def main():
     asyncio.create_task(adc.poll_input())
 
     player = build_player(tx_pin, rx_pin)
+    print(f'Player name: {player.name}')
     await player.reset()
     await player.send_query('vol')
     await player.send_query('eq')
     print('Run commands')
     commands = get_command_script('test.txt')
     await run_commands(commands)
+    await player.dec_vol()
+    await player.dec_vol()
+    await player.play_trk_list([3])
     await player.track_end_ev.wait()
     player.save_config()
     # adc.led.turn_off()
