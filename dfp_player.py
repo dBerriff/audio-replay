@@ -15,12 +15,8 @@ class DfPlayer:
 
     def __init__(self, command_h_):
         self.command_h = command_h_
-        # initial configuration
-        self.config = command_h_.config
-        self.track_count = self.command_h.track_count
         self.vol_factor = command_h_.config['vol_factor']
         self.vol = command_h_.config['vol'] // self.vol_factor
-        self.player_config = command_h_.player_config
         self.track_end_ev = self.command_h.track_end_ev
         self.track_end_ev.set()  # no track playing yet
         self.rx_cmd = 0x00
@@ -30,18 +26,17 @@ class DfPlayer:
         """ reset player including track_count """
         await self.command_h.reset()
         await self.send_query('sd_files')
-        self.track_count = self.command_h.track_count
         await asyncio.sleep_ms(200)
 
     # player methods
 
     async def play_track(self, track):
-        """ play track after previous track """
+        """ play track by number """
         if self.START_TRACK <= track <= self.track_count:
             await self.command_h.play_track(track)
 
     async def play_track_after(self, track):
-        """ play track after previous track finishes """
+        """ play track after current track finishes """
         await self.command_h.track_end_ev.wait()
         await self.play_track(track)
 
@@ -64,7 +59,7 @@ class DfPlayer:
             await self.command_h.set_vol(self.vol * self.vol_factor)
 
     async def set_eq(self, eq_type):
-        """ set eq type """
+        """ set eq by type str """
         await self.command_h.set_eq(eq_type)
 
     async def send_query(self, query):
