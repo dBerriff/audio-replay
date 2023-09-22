@@ -75,13 +75,13 @@ class DfpMiniCh:
                 'sd_track': 0x4c
                 }
     MESSAGE_SIZE = const(10)  # bytes
-    # message-byte indices
+    # mutable message-byte indices
     CMD = const(3)
-    P_M = const(5)  # parameter
+    P_M = const(5)
     P_L = const(6)
-    CS_U = const(P_L + 1)
-    C_M = const(7)  # checksum
+    C_M = const(7)
     C_L = const(8)
+
     VOL_MAX = const(30)
     CONFIG_FILENAME = const('config.json')
 
@@ -112,13 +112,10 @@ class DfpMiniCh:
             - write config file if it does not exist
         """
         if self.cf.is_file():
-            print('Config file found')
             config = self.cf.read_file()
         else:
-            print('Config file not found')
             config = DfpMiniCh._config
             self.cf.write_file(config)
-        print(config)
         return config
 
     def save_config(self):
@@ -126,7 +123,7 @@ class DfpMiniCh:
         self.cf.write_file(self.config)
 
     async def _send_command(self, cmd_, param_=0):
-        """ coro: load tx bytearray word and send
+        """ load tx bytearray word and send
             - lock against multiple attempts to send
         """
         async with self.tx_lock:
@@ -136,9 +133,9 @@ class DfpMiniCh:
             await asyncio.sleep_ms(20)  # DFP recovery time?
 
     async def send_query(self, query):
-        """ send query
-            - 'vol', 'eq', 'sd_files', 'sd_track' """
-        await self._send_command(self.qry_cmds[query])
+        """ send query """
+        if query in self.qry_cmds:
+            await self._send_command(self.qry_cmds[query])
 
     def evaluate_rx_message(self, rx_cmd_, rx_param_):
         """ evaluate incoming command for required action or errors """
@@ -146,18 +143,18 @@ class DfpMiniCh:
             self.ack_ev.set()
         elif rx_cmd_ == 0x3d:  # sd track finished
             self.track_end_ev.set()
-        elif rx_cmd_ == 0x3f:  # qry_init
+        elif rx_cmd_ == 0x3f:  # qry: init
             if (rx_param_ & 0x0002) != 0x0002:
                 raise Exception('DFPlayer error: no SD-card?')
         elif rx_cmd_ == 0x40:  # error
             self.error_ev.set()  # not currently monitored
-        elif rx_cmd_ == 0x43:  # qry_vol
+        elif rx_cmd_ == 0x43:  # qry: vol
             self.config['vol'] = rx_param_
-        elif rx_cmd_ == 0x44:  # qry_eq
+        elif rx_cmd_ == 0x44:  # qry: eq
             self.config['eq'] = self.val_eq[rx_param_]
-        elif rx_cmd_ == 0x48:  # qry_sd_files
+        elif rx_cmd_ == 0x48:  # qry: sd_files
             self.track_count = rx_param_
-        elif rx_cmd_ == 0x4c:  # qry_sd_trk
+        elif rx_cmd_ == 0x4c:  # qry: sd_trk
             self.track = rx_param_
         elif rx_cmd_ == 0x3a:  # media_insert
             print('SD-card inserted.')
@@ -165,7 +162,7 @@ class DfpMiniCh:
             raise Exception('DFPlayer error: SD-card removed!')
 
     async def consume_rx_data(self):
-        """ coro: consume, parse and evaluate received bytearray """
+        """ get and evaluate received bytearray """
         while True:
             await self.rx_queue.is_data.wait()
             ba_ = await self.rx_queue.get()
@@ -173,7 +170,7 @@ class DfpMiniCh:
             self.evaluate_rx_message(self.rx_cmd, self.rx_param)
 
     def player_config(self):
-        """ print selected player settings """
+        """ return player config as str """
         result = f'player: {self.config["name"]}, '
         result += f'vol: {self.config["vol"]}, '
         result += f'eq: {self.config["eq"]}'
@@ -207,22 +204,22 @@ class DfpMiniControl(DfpMiniCh):
         self.track = track
 
     async def play(self):
-        """ coro: start playing; after pause? """
+        """ coro: resume/start playing """
         await self._send_command(0x0d, 0)
 
     async def pause(self):
-        """ coro: stop playing """
+        """ pause/stop playing """
         await self._send_command(0x0e, 0)
 
     async def set_vol(self, level):
-        """ coro: set volume level 0-VOL_MAX """
+        """ set volume 0 - VOL_MAX """
+        level = min(level, self.VOL_MAX)
+        level = max(level, 0)
         await self._send_command(0x06, level)
         self.config['vol'] = level
 
     async def set_eq(self, eq_key):
-        """ set eq to key in:
-            'normal', 'pop', 'rock', 'jazz', 'classic', 'bass'
-        """
+        """ set eq by name """
         if eq_key in self.eq_val:
             await self._send_command(0x07, self.eq_val[eq_key])
             self.config['eq'] = eq_key
