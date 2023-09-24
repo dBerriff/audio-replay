@@ -1,4 +1,4 @@
-# cmd_codec.py
+# dfpm_codec.py
 
 import struct
 

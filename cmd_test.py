@@ -12,60 +12,63 @@ from df_player import DfPlayer
 from uqueue import Buffer
 
 
+def get_command_script(filename):
+    """ read in command-lines from a text file """
+    with open(filename) as fp:
+        commands_ = [line for line in fp]
+    return commands_
+
+
+def parse_command(cmd_line):
+    """ parse command line to cmd and param-list
+        - space (or comma) delimiter """
+    cmd_line = cmd_line.strip()  # trim start/end white space
+    if cmd_line == '':
+        cmd_, params = '', []
+    elif cmd_line.startswith('#'):
+        print(cmd_line)
+        cmd_, params = '', []
+    else:
+        cmd_line = cmd_line.replace(',', ' ')
+        while '  ' in cmd_line:
+            cmd_line = cmd_line.replace('  ', ' ')
+        tokens = cmd_line.split(' ')
+        cmd_ = tokens[0]
+        params = [int(p) for p in tokens[1:]]
+    return cmd_, params
+
+
+async def run_commands(player_, commands_):
+    """ control DFP from simple text commands
+        - format is: 'cmd p0 p1 ...' or 'cmd, p0, p1, ...'
+    """
+    cmd_set = {'zzz', 'trk', 'nxt', 'prv', 'rst', 'vol', 'stp', 'ply'}
+    for line in commands_:
+        await player_.command_h.track_end_ev.wait()
+        cmd_, params = parse_command(line)
+        if cmd_ in cmd_set:
+            print(cmd_, params)
+            if cmd_ == 'zzz':
+                await player_.track_end_ev.wait()
+                await asyncio.sleep(params[0])
+            elif cmd_ == 'trk':
+                await player_.play_trk_list(params)
+            elif cmd_ == 'nxt':
+                await player_.next_track()
+            elif cmd_ == 'prv':
+                await player_.prev_track()
+            elif cmd_ == 'rst':
+                await player_.reset()
+            elif cmd_ == 'vol':
+                await player_.set_vol(params[0])
+            elif cmd_ == 'stp':
+                await player_.command_h.pause()
+            elif cmd_ == 'ply':
+                await player_.command_h.ch_play()
+
+
 async def main():
     """ test DFPlayer controller """
-
-    def get_command_script(filename):
-        """ read in command-lines from a text file """
-        with open(filename) as fp:
-            commands_ = [line for line in fp]
-        return commands_
-
-    def parse_command(cmd_line):
-        """ parse command line to cmd and param-list
-            - space (or comma) delimiter """
-        cmd_line = cmd_line.strip()  # trim start/end white space
-        if cmd_line == '':
-            cmd_, params = '', []
-        elif cmd_line.startswith('#'):
-            print(cmd_line)
-            cmd_, params = '', []
-        else:
-            cmd_line = cmd_line.replace(',', ' ')
-            while '  ' in cmd_line:
-                cmd_line = cmd_line.replace('  ', ' ')
-            tokens = cmd_line.split(' ')
-            cmd_ = tokens[0]
-            params = [int(p) for p in tokens[1:]]
-        return cmd_, params
-
-    async def run_commands(commands_):
-        """ control DFP from simple text commands
-            - format is: 'cmd p0 p1 ...' or 'cmd, p0, p1, ...'
-        """
-        cmd_set = {'zzz', 'trk', 'nxt', 'prv', 'rst', 'vol', 'stp', 'ply'}
-        for line in commands_:
-            await player.command_h.track_end_ev.wait()
-            cmd_, params = parse_command(line)
-            if cmd_ in cmd_set:
-                print(cmd_, params)
-                if cmd_ == 'zzz':
-                    await player.track_end_ev.wait()
-                    await asyncio.sleep(params[0])
-                elif cmd_ == 'trk':
-                    await player.play_trk_list(params)
-                elif cmd_ == 'nxt':
-                    await player.next_track()
-                elif cmd_ == 'prv':
-                    await player.prev_track()
-                elif cmd_ == 'rst':
-                    await player.reset()
-                elif cmd_ == 'vol':
-                    await player.set_vol(params[0])
-                elif cmd_ == 'stp':
-                    await player.command_h.pause()
-                elif cmd_ == 'ply':
-                    await player.command_h.ch_play()
 
     def build_player(tx_p, rx_p):
         """ build player from components """
@@ -85,18 +88,15 @@ async def main():
     asyncio.create_task(adc.poll_input())
 
     player = build_player(tx_pin, rx_pin)
-    print(f'Player name: {player.name}')
+    print(f'Player name: {player.name}, vol factor: {player.vol_factor}')
     await player.reset()
-    await player.send_query('vol')
-    await player.send_query('eq')
+    print(f'Config: {player.config}')
+    print(player.vol, player.eq)
     print('Run commands')
     commands = get_command_script('test.txt')
-    await run_commands(commands)
-    await player.dec_vol()
-    await player.dec_vol()
-    await player.play_trk_list([3])
-    await player.track_end_ev.wait()
+    await run_commands(player, commands)
     player.save_config()
+    print(f'Config: {player.config}')
     # adc.led.turn_off()
 
 

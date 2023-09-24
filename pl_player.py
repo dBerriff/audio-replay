@@ -3,7 +3,7 @@
 
 import uasyncio as asyncio
 from df_player import DfPlayer
-from dfp_support import shuffle, Led
+from dfp_support import shuffle, Led, Button, HoldButton
 
 
 class PlPlayer(DfPlayer):
@@ -11,12 +11,14 @@ class PlPlayer(DfPlayer):
         - playlist interface: index tracks from 1 to match DFPlayer
     """
 
-    def __init__(self, command_h_):
+    def __init__(self, command_h_, btn_pins_):
         super().__init__(command_h_)
+        self.buttons = DfpButtons(self, *btn_pins_)
         self._playlist = []
         self._track_count = 0
-        self._pl_track_index = self.START_TRACK
+        self._index = self.START_TRACK
         self.led = Led('LED')
+        asyncio.create_task(self.buttons.poll_buttons())
     
     @property
     def playlist(self):
@@ -31,18 +33,16 @@ class PlPlayer(DfPlayer):
         self._playlist.insert(0, 0)
 
     async def play_pl_track(self, track_index_):
-        """ play current playlist track
-            - offset by -1 to match list index
-        """
-        self._pl_track_index = track_index_
+        """ play playlist track by index """
+        self._index = track_index_
         await self.play_track_after(self._playlist[track_index_])
 
     async def next_pl_track(self):
         """ coro: play next track """
-        self._pl_track_index += 1
-        if self._pl_track_index > self._track_count:
-            self._pl_track_index = self.START_TRACK
-        await self.play_pl_track(self._pl_track_index)
+        self._index += 1
+        if self._index > self._track_count:
+            self._index = self.START_TRACK
+        await self.play_pl_track(self._index)
 
     async def play_playlist(self):
         """ play playlist """
@@ -51,18 +51,72 @@ class PlPlayer(DfPlayer):
             await self.next_pl_track()
 
     async def dec_vol(self):
-        """ decrement volume - blink value """
-        if self.vol > 1:
-            self.vol -= 1
-            await self.update_vol()
-            asyncio.create_task(self.led.blink(self.vol))
+        """ decrement volume by 1 unit and blink value """
+        if self.vol > 0:
+            vol = self.vol - 1
+            await self.set_vol(vol)
+            asyncio.create_task(self.led.blink(vol))
 
     async def inc_vol(self):
-        """ increment volume - blink value """
+        """ increment volume by 1 unit and blink value """
         if self.vol < self.VOL_MAX:
-            self.vol += 1
-            await self.update_vol()
-            asyncio.create_task(self.led.blink(self.vol))
+            vol = self.vol + 1
+            await self.set_vol(vol)
+            asyncio.create_task(self.led.blink(vol))
+
+
+class DfpButtons:
+    """ player buttons """
+
+    def __init__(self, player_, play_pin, v_dec_pin, v_inc_pin):
+        self.player = player_
+        self.play_btn = Button(play_pin)
+        self.v_inc_btn = HoldButton(v_inc_pin)
+        self.v_dec_btn = HoldButton(v_dec_pin)
+        self.led = Led('LED')
+
+    async def play_btn_pressed(self):
+        """ play next playlist track """
+        button = self.play_btn
+        while True:
+            await button.press_ev.wait()
+            await self.player.next_pl_track()
+            button.press_ev.clear()
+
+    async def inc_btn_pressed(self):
+        """ increment player volume setting """
+        button = self.v_inc_btn
+        while True:
+            await button.press_ev.wait()
+            if button.state == 1:
+                await self.player.inc_vol()
+            elif button.state == 2:
+                self.player.save_config()
+                asyncio.create_task(self.led.flash(1000))
+            button.press_ev.clear()
+
+    async def dec_btn_pressed(self):
+        """ decrement player volume setting """
+        button = self.v_dec_btn
+        while True:
+            await button.press_ev.wait()
+            if button.state == 1:
+                await self.player.dec_vol()
+            elif button.state == 2:
+                self.player.save_config()
+                asyncio.create_task(self.led.flash(1000))
+            button.press_ev.clear()
+
+    async def poll_buttons(self):
+        """ start button polling """
+        # buttons: self poll to set state
+        asyncio.create_task(self.play_btn.poll_state())
+        asyncio.create_task(self.v_inc_btn.poll_state())
+        asyncio.create_task(self.v_dec_btn.poll_state())
+        # buttons: respond to press or hold state
+        asyncio.create_task(self.play_btn_pressed())
+        asyncio.create_task(self.inc_btn_pressed())
+        asyncio.create_task(self.dec_btn_pressed())
 
 
 async def main():

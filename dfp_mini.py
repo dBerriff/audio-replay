@@ -6,51 +6,39 @@
 """
 
 import uasyncio as asyncio
-from cmd_codec import MiniCmdPackUnpack
-from dfp_support import ConfigFile
+from dfpm_codec import MiniCmdPackUnpack
 
 
 class DfpMini:
     """ formats, sends and receives command and query messages
         - N.B. reset() method must be called to initialise object
+        - hex values are generally hard-coded as player-specific
         - messages are sent through Tx and Rx queues
         - config dict is set from file config.json or DfpMini._config
     """
 
-    _config = {'name': 'DFPlayer Mini',
-               'vol_factor': 3,  # 0 - 30
-               'vol': 15,
-               'eq': 'normal'
-               }
+    config = {'vol': 15, 'eq': 'normal'}
     qry_cmds = {'vol': 0x43,
                 'eq': 0x44,
                 'sd_files': 0x48,
                 'sd_track': 0x4c
                 }
-    MESSAGE_SIZE = const(10)  # bytes
-    # mutable message-byte indices
-    CMD = const(3)
-    P_M = const(5)
-    P_L = const(6)
-    C_M = const(7)
-    C_L = const(8)
 
+    NAME = const('DFPlayer Mini')
     VOL_MAX = const(30)
+    VOL_FACTOR = const(VOL_MAX // 10)  # normalise to 0-10 range
     CONFIG_FILENAME = const('config.json')
 
-    # settings dictionaries
-    eq_val = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
-    val_eq = {value: key for key, value in eq_val.items()}
+    # eq dictionary for decoding eq query response
+    eq_val_str = {0: 'normal', 1: 'pop', 2: 'rock', 3: 'jazz', 4: 'classic', 5: 'bass'}
+    eq_str_val = {value: key for key, value in eq_val_str.items()}
 
     def __init__(self, data_link_):
         # self._data_link = data_link_
-        self.config = DfpMini._config
-        self.cf = ConfigFile(self.CONFIG_FILENAME)
-        self.get_config()
         self.stream_tx_rx = data_link_.stream_tx_rx
         self.tx_queue = data_link_.tx_queue
         self.rx_queue = data_link_.rx_queue
-        self.cmd_bytes = MiniCmdPackUnpack()
+        self.cmd_codec = MiniCmdPackUnpack()
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
         self.track_count = 0
@@ -61,27 +49,7 @@ class DfpMini:
         self.tx_lock = asyncio.Lock()
         # task to process returned data
         asyncio.create_task(self.consume_rx_data())
-
-    def get_config(self):
-        """ initialise config from file or write defaults """
-        if self.cf.is_file():
-            self.config = self.cf.read_file()
-        else:
-            self.cf.write_file(self.config)
-
-    def save_config(self):
-        """ save config settings """
-        if self.cf.is_file() and self.config == self.cf.read_file():
-            return
-        self.cf.write_file(self.config)
-
-    def player_config_str(self):
-        """ return player config as str """
-        result = f'player: {self.config["name"]}, '
-        result += f'vol factor: {self.config["vol_factor"]}, '
-        result += f'vol: {self.config["vol"]}, '
-        result += f'eq: {self.config["eq"]}'
-        return result
+        self.config = DfpMini.config
 
     async def _send_command(self, cmd_, param_=0):
         """ load tx bytearray word and send
@@ -89,7 +57,7 @@ class DfpMini:
         """
         async with self.tx_lock:
             self.ack_ev.clear()
-            await self.tx_queue.put(self.cmd_bytes.pack_tx_ba(cmd_, param_))
+            await self.tx_queue.put(self.cmd_codec.pack_tx_ba(cmd_, param_))
             await self.ack_ev.wait()  # wait for DFPlayer ACK
             await asyncio.sleep_ms(20)  # DFP recovery time?
 
@@ -112,7 +80,7 @@ class DfpMini:
         elif rx_cmd_ == 0x43:  # qry: vol
             self.config['vol'] = rx_param_
         elif rx_cmd_ == 0x44:  # qry: eq
-            self.config['eq'] = self.val_eq[rx_param_]
+            self.config['eq'] = self.eq_val_str[rx_param_]
         elif rx_cmd_ == 0x48:  # qry: sd_files
             self.track_count = rx_param_
         elif rx_cmd_ == 0x4c:  # qry: sd_trk
@@ -127,7 +95,7 @@ class DfpMini:
         while True:
             await self.rx_queue.is_data.wait()
             ba_ = await self.rx_queue.get()
-            self.rx_cmd, self.rx_param = self.cmd_bytes.unpack_rx_ba(ba_)
+            self.rx_cmd, self.rx_param = self.cmd_codec.unpack_rx_ba(ba_)
             self.evaluate_rx_message(self.rx_cmd, self.rx_param)
 
     # DFPlayer Mini control methods
@@ -143,6 +111,8 @@ class DfpMini:
                 raise Exception(f'DFPlayer ACK with error: no SD card?')
             else:
                 raise Exception('DFPlayer no ACK.')
+        await self.set_vol(self.config['vol'])
+        await self.set_eq(self.config['eq'])
 
     async def play_track(self, track):
         """ coro: play track n """
@@ -158,10 +128,16 @@ class DfpMini:
         """ pause/stop playing """
         await self._send_command(0x0e, 0)
 
-    async def set_config_vol(self):
-        """ set volume 0 - VOL_MAX """
-        await self._send_command(0x06, self.config['vol'])
+    async def set_vol(self, value):
+        """ set volume VOL_MIN - VOL_MAX """
+        if not 0 <= value <= self.VOL_MAX:
+            value = self.VOL_MAX // 2
+        await self._send_command(0x06, value)
+        return value
 
-    async def set_config_eq(self):
-        """ set eq by name """
-        await self._send_command(0x07, self.eq_val[self.config['eq']])
+    async def set_eq(self, value):
+        """ set eq by int value """
+        if value not in self.eq_val_str:
+            value = 0
+        await self._send_command(0x07, value)
+        return value

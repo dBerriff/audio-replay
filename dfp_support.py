@@ -37,7 +37,7 @@ class Led:
             await asyncio.sleep_ms(500)
 
     def turn_off(self):
-        """ """
+        """ turn LED off """
         self.led.off()
             
 
@@ -60,24 +60,30 @@ class LedFlash:
 
 class ConfigFile:
     """ write and read json config files """
-    def __init__(self, filename):
+    def __init__(self, filename, default):
         self.filename = filename
+        self.default = default
 
-    def write_file(self, data):
+    def write_cf(self, data):
         """ write config file as json dict """
-        with open(self.filename, 'w') as write_f:
-            json.dump(data, write_f)
+        with open(self.filename, 'w') as f:
+            json.dump(data, f)
 
-    def read_file(self):
+    def read_cf(self):
         """ return config data dict from file
             - calling code checks is_config() """
-        with open(self.filename, 'r') as read_f:
-            data = json.load(read_f)
+        if self.is_file(self.filename):
+            with open(self.filename, 'r') as f:
+                data = json.load(f)
+        else:
+            data = self.default
+            self.write_cf(data)
         return data
 
-    def is_file(self):
+    @staticmethod
+    def is_file(f):
         """ check if config file exists """
-        return self.filename in os.listdir()
+        return f in os.listdir()
         
 
 class Button:
@@ -140,68 +146,6 @@ class HoldButton(Button):
                     self.press_ev.set()
                 prev_pin_state = pin_state
             await asyncio.sleep_ms(20)
-
-
-class DfpButtons:
-    """ player buttons """
-    
-    def __init__(self, play_pin, v_dec_pin, v_inc_pin):
-        self.play_btn = Button(play_pin)
-        self.v_inc_btn = HoldButton(v_inc_pin)
-        self.v_dec_btn = HoldButton(v_dec_pin)
-        self.led = Led('LED')
-        # methods assigned by dfp_player
-        self.next_track = None
-        self.dec_vol = None
-        self.inc_vol = None
-        self.save_config = None
-
-    async def play_btn_pressed(self):
-        """ change player volume setting
-            - simple Button
-        """
-        button = self.play_btn
-        while True:
-            await button.press_ev.wait()
-            await self.next_track()
-            button.press_ev.clear()
-
-    async def inc_btn_pressed(self):
-        """ inc player volume setting
-            - HoldButton
-        """
-        button_ = self.v_inc_btn
-        while True:
-            await button_.press_ev.wait()
-            if button_.state == 1:
-                await self.inc_vol()
-            elif button_.state == 2:
-                self.save_config()
-            button_.press_ev.clear()
-
-    async def dec_btn_pressed(self):
-        """ dec player volume setting
-            - HoldButton
-        """
-        button_ = self.v_dec_btn
-        while True:
-            await button_.press_ev.wait()
-            if button_.state == 1:
-                await self.dec_vol()
-            elif button_.state == 2:
-                self.save_config()
-            button_.press_ev.clear()
-
-    def poll_buttons(self):
-        """ start button polling """
-        # buttons: self poll
-        asyncio.create_task(self.play_btn.poll_state())
-        asyncio.create_task(self.v_inc_btn.poll_state())
-        asyncio.create_task(self.v_dec_btn.poll_state())
-        # buttons: respond to press
-        asyncio.create_task(self.play_btn_pressed())
-        asyncio.create_task(self.inc_btn_pressed())
-        asyncio.create_task(self.dec_btn_pressed())
 
 
 def shuffle(list_):
