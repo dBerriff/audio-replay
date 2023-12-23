@@ -7,6 +7,8 @@
 
 import uasyncio as asyncio
 from dfpm_codec import MiniCmdPackUnpack
+from uqueue import Buffer
+from data_link import DataLink
 
 
 class DfpMini:
@@ -33,11 +35,12 @@ class DfpMini:
     eq_val_str = {0: 'normal', 1: 'pop', 2: 'rock', 3: 'jazz', 4: 'classic', 5: 'bass'}
     eq_str_val = {value: key for key, value in eq_val_str.items()}
 
-    def __init__(self, data_link_):
+    def __init__(self, tx_p, rx_p):
         # self._data_link = data_link_
-        self.stream_tx_rx = data_link_.stream_tx_rx
-        self.tx_queue = data_link_.tx_queue
-        self.rx_queue = data_link_.rx_queue
+        data_link = DataLink(tx_p, rx_p, 9600, 10, Buffer(), Buffer())
+        self.stream_tx_rx = data_link.stream_tx_rx
+        self.tx_queue = data_link.tx_queue
+        self.rx_queue = data_link.rx_queue
         self.cmd_codec = MiniCmdPackUnpack()
         self.rx_cmd = 0x00
         self.rx_param = 0x0000

@@ -71,8 +71,8 @@ class DfpButtons:
     def __init__(self, player_, play_pin, v_dec_pin, v_inc_pin):
         self.player = player_
         self.play_btn = Button(play_pin)
-        self.v_inc_btn = HoldButton(v_inc_pin)
         self.v_dec_btn = HoldButton(v_dec_pin)
+        self.v_inc_btn = HoldButton(v_inc_pin)
         self.led = Led('LED')
 
     async def play_btn_pressed(self):
@@ -81,18 +81,6 @@ class DfpButtons:
         while True:
             await button.press_ev.wait()
             await self.player.next_pl_track()
-            button.press_ev.clear()
-
-    async def inc_btn_pressed(self):
-        """ increment player volume setting """
-        button = self.v_inc_btn
-        while True:
-            await button.press_ev.wait()
-            if button.state == 1:
-                await self.player.inc_vol()
-            elif button.state == 2:
-                self.player.save_config()
-                asyncio.create_task(self.led.flash(1000))
             button.press_ev.clear()
 
     async def dec_btn_pressed(self):
@@ -107,16 +95,28 @@ class DfpButtons:
                 asyncio.create_task(self.led.flash(1000))
             button.press_ev.clear()
 
+    async def inc_btn_pressed(self):
+        """ increment player volume setting """
+        button = self.v_inc_btn
+        while True:
+            await button.press_ev.wait()
+            if button.state == 1:
+                await self.player.inc_vol()
+            elif button.state == 2:
+                self.player.save_config()
+                asyncio.create_task(self.led.flash(1000))
+            button.press_ev.clear()
+
     async def poll_buttons(self):
         """ start button polling """
         # buttons: self poll to set state
         asyncio.create_task(self.play_btn.poll_state())
-        asyncio.create_task(self.v_inc_btn.poll_state())
         asyncio.create_task(self.v_dec_btn.poll_state())
+        asyncio.create_task(self.v_inc_btn.poll_state())
         # buttons: respond to press or hold state
         asyncio.create_task(self.play_btn_pressed())
-        asyncio.create_task(self.inc_btn_pressed())
         asyncio.create_task(self.dec_btn_pressed())
+        asyncio.create_task(self.inc_btn_pressed())
 
 
 async def main():

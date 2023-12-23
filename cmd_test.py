@@ -6,10 +6,8 @@
 
 import uasyncio as asyncio
 from dfp_support import LedFlash
-from data_link import DataLink
 from dfp_mini import DfpMini
 from df_player import DfPlayer
-from uqueue import Buffer
 
 
 def get_command_script(filename):
@@ -70,12 +68,6 @@ async def run_commands(player_, commands_):
 async def main():
     """ test DFPlayer controller """
 
-    def build_player(tx_p, rx_p):
-        """ build player from components """
-        data_link = DataLink(tx_p, rx_p, 9600, 10, Buffer(), Buffer())
-        cmd_handler = DfpMini(data_link)
-        return DfPlayer(cmd_handler)
-
     # pins
     # UART
     tx_pin = 0
@@ -83,12 +75,11 @@ async def main():
     # ADC
     adc_pin = 26
     led_pin = 'LED'
-    
     adc = LedFlash(adc_pin, led_pin)
     asyncio.create_task(adc.poll_input())
 
-    player = build_player(tx_pin, rx_pin)
-    print(f'Player name: {player.name}, vol factor: {player.vol_factor}')
+    player = DfPlayer(DfpMini(tx_pin, rx_pin))
+    print(f'Player name: {player.name}')
     await player.reset()
     print(f'Config: {player.config}')
     print(player.vol, player.eq)
