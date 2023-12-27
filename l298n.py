@@ -1,7 +1,9 @@
 # l298n.py
 """ model L298N motor controller """
 
-from machine import Pin, PWM   
+from machine import Pin, PWM
+from micropython import const
+from collections import namedtuple
 
 
 class L298nChannel:
@@ -12,7 +14,7 @@ class L298nChannel:
         -- slices are pins (0 and 1), (2 and 3), ...
     """
 
-    U16 = 0xffff  # 16-bit-register control
+    U16 = const(0xffff)  # 16-bit-register control
 
     def __init__(self, pwm_pin, motor_pins_, frequency):
         self.enable = PWM(Pin(pwm_pin))  # L298N pins are labelled 'EN'
@@ -20,6 +22,7 @@ class L298nChannel:
         self.sw_2 = Pin(motor_pins_[1], Pin.OUT)
         self.set_freq(frequency)
         self.set_dc_u16(0)
+        self.state = None
         self.set_state('S')
 
     def set_freq(self, frequency):
@@ -63,6 +66,9 @@ class L298N:
         -- sw_pins  => (IN1, IN2, IN3, IN4)
     """
 
+    Speed = namedtuple('Speed', ['f', 'r'])  # forward, reverse percentages
+
+
     def __init__(self, pwm_pins_, sw_pins_, f):
         # channel A: PWM input to ENA; bridge-switching inputs to IN1 and IN2
         self.channel_a = L298nChannel(
@@ -70,4 +76,32 @@ class L298N:
         # channel B: PWM input to ENB; bridge-switching inputs to IN3 and IN4
         self.channel_b = L298nChannel(
             pwm_pins_[1], (sw_pins_[2], sw_pins_[3]), f)
-        print(f'L298N initialised: PWM pins: {pwm_pins_}; switch pins: {sw_pins_}; freq: {self.channel_a.enable.freq()}')
+        print(f'L298N initialised: {pwm_pins_}; {sw_pins_}; {self.channel_a.enable.freq()}')
+        self.channel_state = None
+
+    async def run_channels(self):
+        """ run channels between 2 states """
+        motor_a_speed = Motor.Speed(f=75, r=50)
+        motor_b_speed = Motor.Speed(f=75, r=50)
+
+        if self.channel_state == 0:
+            # A forward and B reverse
+            self.channel_a.state = 'R'
+            self.channel_b.state = 'F'
+            await asyncio.gather(
+                self.channel_a.accel(motor_a_speed.r),
+                self.channel_b.accel(motor_b_speed.f))
+            self.channel_state = 1
+        else:
+            self.channel_a.state = 'F'
+            self.channel_b.state = 'R'
+            await asyncio.gather(
+                self.channel_a.accel(motor_a_speed.f),
+                self.channel_b.accel(motor_b_speed.r))
+            self.channel_state = 0
+
+        # free-run period
+        await asyncio.sleep_ms(10_000)
+        await asyncio.gather(
+            self.channel_a.decel(),
+            self.channel_b.decel())
