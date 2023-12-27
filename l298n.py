@@ -77,31 +77,3 @@ class L298N:
         self.channel_b = L298nChannel(
             pwm_pins_[1], (sw_pins_[2], sw_pins_[3]), f)
         print(f'L298N initialised: {pwm_pins_}; {sw_pins_}; {self.channel_a.enable.freq()}')
-        self.channel_state = None
-
-    async def run_channels(self):
-        """ run channels between 2 states """
-        motor_a_speed = Motor.Speed(f=75, r=50)
-        motor_b_speed = Motor.Speed(f=75, r=50)
-
-        if self.channel_state == 0:
-            # A forward and B reverse
-            self.channel_a.state = 'R'
-            self.channel_b.state = 'F'
-            await asyncio.gather(
-                self.channel_a.accel(motor_a_speed.r),
-                self.channel_b.accel(motor_b_speed.f))
-            self.channel_state = 1
-        else:
-            self.channel_a.state = 'F'
-            self.channel_b.state = 'R'
-            await asyncio.gather(
-                self.channel_a.accel(motor_a_speed.f),
-                self.channel_b.accel(motor_b_speed.r))
-            self.channel_state = 0
-
-        # free-run period
-        await asyncio.sleep_ms(10_000)
-        await asyncio.gather(
-            self.channel_a.decel(),
-            self.channel_b.decel())

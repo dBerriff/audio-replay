@@ -3,7 +3,6 @@
 
 import asyncio
 from collections import namedtuple
-from micropython import const
 from l298n import L298N
 from buttons import Button
 
