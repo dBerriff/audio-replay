@@ -2,8 +2,6 @@
 """ model L298N motor controller """
 
 from machine import Pin, PWM
-from micropython import const
-from collections import namedtuple
 
 
 class L298nChannel:
@@ -12,9 +10,9 @@ class L298nChannel:
         - frequency and duty cycle: no range checking
         - if using Pi Pico, 2 PWM "slice" channels share the same frequency
         -- slices are pins (0 and 1), (2 and 3), ...
+        - no range check on frequency
     """
 
-    U16 = const(0xffff)  # 16-bit-register control
 
     def __init__(self, pwm_pin, motor_pins_, frequency):
         self.enable = PWM(Pin(pwm_pin))  # L298N pins are labelled 'EN'
@@ -22,11 +20,9 @@ class L298nChannel:
         self.sw_2 = Pin(motor_pins_[1], Pin.OUT)
         self.set_freq(frequency)
         self.set_dc_u16(0)
-        self.state = None
-        self.set_state('S')
 
     def set_freq(self, frequency):
-        """ set pulse frequency within limits """
+        """ set pulse frequency """
         self.enable.freq(frequency)
 
     def set_dc_u16(self, dc_u16):
@@ -36,15 +32,12 @@ class L298nChannel:
     def set_state(self, state):
         """ set H-bridge switch states """
         if state == 'F':
-            self.state = 'F'
             self.sw_1.value(1)
             self.sw_2.value(0)
         elif state == 'R':
-            self.state = 'R'
             self.sw_1.value(0)
             self.sw_2.value(1)
         elif state == 'S':
-            self.state = 'S'
             self.sw_1.value(1)
             self.sw_2.value(1)
 
@@ -53,7 +46,6 @@ class L298nChannel:
         self.set_dc_u16(0)
         self.sw_1.value(0)
         self.sw_2.value(0)
-        self.state = 'S'
 
 
 class L298N:
@@ -66,14 +58,15 @@ class L298N:
         -- sw_pins  => (IN1, IN2, IN3, IN4)
     """
 
-    Speed = namedtuple('Speed', ['f', 'r'])  # forward, reverse percentages
-
 
     def __init__(self, pwm_pins_, sw_pins_, f):
+
         # channel A: PWM input to ENA; bridge-switching inputs to IN1 and IN2
         self.channel_a = L298nChannel(
             pwm_pins_[0], (sw_pins_[0], sw_pins_[1]), f)
+
         # channel B: PWM input to ENB; bridge-switching inputs to IN3 and IN4
         self.channel_b = L298nChannel(
             pwm_pins_[1], (sw_pins_[2], sw_pins_[3]), f)
+
         print(f'L298N initialised: {pwm_pins_}; {sw_pins_}; {self.channel_a.enable.freq()}')
