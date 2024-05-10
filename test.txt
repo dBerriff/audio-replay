@@ -1,4 +1,4 @@
-# test commands for cmd_player.py
+# test commands for script_player.py
 vol 5
 trk 79
 trk 76, 9,  25

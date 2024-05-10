@@ -1,13 +1,13 @@
-# cmd_test.py
+# script_player.py
 """ Control DFPlayer Mini over UART from text-file commands
     - command format is: cmd parameter-list, space (or comma) delimited
     - cmd is 3-letter string; parameters are list of int
 """
 
-import uasyncio as asyncio
-from dfp_support import LedFlash
+import asyncio
 from dfp_mini import DfpMini
 from df_player import DfPlayer
+from dfp_support import LedFlash
 
 
 def get_command_script(filename):
@@ -42,7 +42,7 @@ async def run_commands(player_, commands_):
     """
     cmd_set = {'zzz', 'trk', 'nxt', 'prv', 'rst', 'vol', 'stp', 'ply'}
     for line in commands_:
-        await player_.command_h.track_end_ev.wait()
+        await player_.cmd_handler.track_end_ev.wait()
         cmd_, params = parse_command(line)
         if cmd_ in cmd_set:
             print(cmd_, params)
@@ -60,9 +60,9 @@ async def run_commands(player_, commands_):
             elif cmd_ == 'vol':
                 await player_.set_vol(params[0])
             elif cmd_ == 'stp':
-                await player_.command_h.pause()
+                await player_.cmd_handler.pause()
             elif cmd_ == 'ply':
-                await player_.command_h.ch_play()
+                await player_.cmd_handler.ch_play()
 
 
 async def main():
@@ -70,9 +70,9 @@ async def main():
 
     # pins
     # UART
-    tx_pin = 0
-    rx_pin = 1
-    # ADC
+    tx_pin = 16
+    rx_pin = 17
+    # ADC for visual response
     adc_pin = 26
     led_pin = 'LED'
     adc = LedFlash(adc_pin, led_pin)
@@ -86,8 +86,6 @@ async def main():
     print('Run commands')
     commands = get_command_script('test.txt')
     await run_commands(player, commands)
-    player.save_config()
-    print(f'Config: {player.config}')
     # adc.led.turn_off()
 
 

@@ -1,6 +1,6 @@
 """ Queue class """
 
-import uasyncio as asyncio
+import asyncio
 
 
 class Buffer:

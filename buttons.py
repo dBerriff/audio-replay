@@ -1,9 +1,10 @@
 # buttons.py
 
-import uasyncio as asyncio
+import asyncio
 from machine import Pin
 from micropython import const
 from time import ticks_ms, ticks_diff
+
 
 class Button:
     """ button with click state - no debounce """

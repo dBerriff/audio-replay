@@ -10,7 +10,7 @@
     - ! deque is not implemented in MP so queue uses a list of items
 """
 
-import uasyncio as asyncio
+import asyncio
 from machine import Pin, UART
 
 

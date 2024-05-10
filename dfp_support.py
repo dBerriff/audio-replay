@@ -3,7 +3,7 @@
     - 0: not pressed; 1: clicked; 2: held
     - events are set on button release
 """
-import uasyncio as asyncio
+import asyncio
 from machine import Pin, ADC
 from random import randint
 import json
@@ -82,6 +82,7 @@ class ConfigFile:
     def is_file(f):
         """ check if config file exists """
         return f in os.listdir()
+
 
 def shuffle(list_):
     """ return a shuffled list

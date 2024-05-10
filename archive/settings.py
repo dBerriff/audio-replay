@@ -1,4 +1,4 @@
-""" for play_audio.py: consolidate user and device settings """
+""" for play_audio.py (CircuitPython): consolidate user and device settings """
 
 # import all Pico pin objects to simplify user settings
 from board import GP0, GP1, GP2, GP3, GP4, GP5, GP6, GP7, GP8, GP9, \

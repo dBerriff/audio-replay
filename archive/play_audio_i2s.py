@@ -43,7 +43,7 @@ import gc  # garbage collection for RAM
 from time import sleep
 
 # device settings
-import settings
+from archive import settings
 
 
 def file_ext(name_: str) -> str:

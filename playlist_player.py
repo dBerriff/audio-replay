@@ -1,18 +1,24 @@
 # df_player.py
-""" Control DFPlayer Mini over UART """
+"""
+    Control DFPlayer Mini over UART
+    Class PlPlayer plays tracks in a playlist
+"""
 
-import uasyncio as asyncio
+import asyncio
 from df_player import DfPlayer
-from dfp_support import shuffle, Led, Button, HoldButton
+from dfp_support import shuffle, Led
+from buttons import Button, HoldButton
 
 
 class PlPlayer(DfPlayer):
     """ play tracks in a playlist
         - playlist interface: index tracks from 1 to match DFPlayer
     """
+    
+    START_TRACK = 1
 
-    def __init__(self, command_h_, btn_pins_):
-        super().__init__(command_h_)
+    def __init__(self, cmd_handler, btn_pins_):
+        super().__init__(cmd_handler)
         self.buttons = DfpButtons(self, *btn_pins_)
         self._playlist = []
         self._track_count = 0
@@ -26,7 +32,7 @@ class PlPlayer(DfPlayer):
 
     def build_playlist(self, shuffled=False):
         """ shuffle playlist track sequence """
-        self._track_count = self.command_h.track_count
+        self._track_count = self.cmd_handler.track_count
         self._playlist = [i + 1 for i in range(self._track_count)]
         if shuffled:
             self._playlist = shuffle(self._playlist)
@@ -36,6 +42,7 @@ class PlPlayer(DfPlayer):
         """ play playlist track by index """
         self._index = track_index_
         await self.play_track_after(self._playlist[track_index_])
+        print(f"Playing track: {self._index}")
 
     async def next_pl_track(self):
         """ coro: play next track """

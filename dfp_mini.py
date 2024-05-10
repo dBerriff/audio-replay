@@ -5,7 +5,7 @@
     Some DFP mini commands do not work so are implemented in software.
 """
 
-import uasyncio as asyncio
+import asyncio
 from dfpm_codec import MiniCmdPackUnpack
 from uqueue import Buffer
 from data_link import DataLink
@@ -19,7 +19,7 @@ class DfpMini:
         - config dict is set from file config.json or DfpMini._config
     """
 
-    config = {'vol': 15, 'eq': 'normal'}
+    config = {'vol': 5, 'eq': 'bass'}
     qry_cmds = {'vol': 0x43,
                 'eq': 0x44,
                 'sd_files': 0x48,
@@ -33,7 +33,7 @@ class DfpMini:
 
     # eq dictionary for decoding eq query response
     eq_val_str = {0: 'normal', 1: 'pop', 2: 'rock', 3: 'jazz', 4: 'classic', 5: 'bass'}
-    eq_str_val = {value: key for key, value in eq_val_str.items()}
+    eq_str_val = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
 
     def __init__(self, tx_p, rx_p):
         # self._data_link = data_link_

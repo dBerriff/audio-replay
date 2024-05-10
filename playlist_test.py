@@ -1,11 +1,11 @@
 # df_player.py
 """ Control DFPlayer Mini over UART """
 
-import uasyncio as asyncio
+import asyncio
 from dfp_support import LedFlash
 from data_link import DataLink
 from dfp_mini import DfpMini
-from pl_player import PlPlayer
+from playlist_player import PlPlayer
 from uqueue import Buffer
 
 
@@ -14,20 +14,19 @@ async def main():
 
     async def keep_alive():
         """ keep-alive loop """
-        while True:
+        for _ in range(60):
             await asyncio.sleep_ms(1_000)
-            print(player.vol)
 
     def build_player(tx_p, rx_p, btn_pins_):
         """ build player from components """
         data_link = DataLink(tx_p, rx_p, 9600, 10, Buffer(), Buffer())
-        cmd_handler = DfpMini(data_link)
+        cmd_handler = DfpMini(tx_p, rx_p)
         return PlPlayer(cmd_handler, btn_pins_)
 
     # pins
     # UART
-    tx_pin = 0
-    rx_pin = 1
+    tx_pin = 16
+    rx_pin = 17
     # ADC
     adc_pin = 26
     led_pin = 'LED'
@@ -43,10 +42,9 @@ async def main():
     await player.reset()
     player.build_playlist(shuffled=False)
     print(f'Config: {player.config}')
-    # play track 1 as test
-    await player.play_pl_track(1)
-    # player.print_player_settings()
-    await keep_alive()
+    player.build_playlist()
+    await player.play_playlist()
+
 
 if __name__ == '__main__':
     try:
