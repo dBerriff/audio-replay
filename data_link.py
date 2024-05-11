@@ -5,7 +5,7 @@
 # Copyright Peter Hinch 2017-2022 Released under the MIT license
 
 """
-    adapted and developed by David B Jones for Famous Trains Derby.
+    adapted and developed by David B Jones
     - uses a queue or buffer for Tx and Rx streams
     - ! deque is not implemented in MP so queue uses a list of items
 """
