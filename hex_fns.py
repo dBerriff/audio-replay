@@ -18,28 +18,28 @@ def byte_str(b):
     return '0x' + byte_digits(b)
 
 
-def slice_reg16(value):
+def slice_u16(value):
     """ slice 16-bit register into msb and lsb bytes """
     lsb = value & 0xff
     msb = value >> 8 & 0xff
     return msb, lsb
 
 
-def reg16_str(r):
+def u16_str(r):
     """ return 16-bit value as hex str """
-    msb, lsb = slice_reg16(r)
+    msb, lsb = slice_u16(r)
     return '0x' + byte_digits(msb) + byte_digits(lsb)
 
 
-def m_l_reg16(msb, lsb):
+def m_l_u16(msb, lsb):
     """ combine msb and lsb for 16-bit value """
     value = msb << 8
     value += lsb
     return value & 0xffff
 
 
-def m_l_reg16_str(msb, lsb):
-    return reg16_str(m_l_reg16(msb, lsb))
+def m_l_u16_str(msb, lsb):
+    return u16_str(m_l_u16(msb, lsb))
 
 
 def byte_array_str(ba):
@@ -53,7 +53,7 @@ def byte_array_str(ba):
 def main():
     """ test hex function """
     for i in range(1024):
-        print(i, hex(i), byte_digits(i), byte_str(i), reg16_str(i))
+        print(i, hex(i), byte_digits(i), byte_str(i), u16_str(i))
 
 
 if __name__ == '__main__':

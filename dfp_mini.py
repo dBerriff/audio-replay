@@ -34,6 +34,7 @@ class DfpMini:
     # eq dictionary for decoding eq query response
     eq_val_str = {0: 'normal', 1: 'pop', 2: 'rock', 3: 'jazz', 4: 'classic', 5: 'bass'}
     eq_str_val = {'normal': 0, 'pop': 1, 'rock': 2, 'jazz': 3, 'classic': 4, 'bass': 5}
+    eq_set = set(eq_val_str.keys())
 
     def __init__(self, tx_p, rx_p):
         # self._data_link = data_link_
@@ -54,8 +55,8 @@ class DfpMini:
         asyncio.create_task(self.consume_rx_data())
         self.config = DfpMini.config
 
-    async def _send_command(self, cmd_, param_=0):
-        """ load tx bytearray word and send
+    async def send_command(self, cmd_, param_=0):
+        """ coro: load tx bytearray word and send
             - lock against multiple attempts to send
         """
         async with self.tx_lock:
@@ -65,9 +66,9 @@ class DfpMini:
             await asyncio.sleep_ms(20)  # DFP recovery time?
 
     async def send_query(self, query):
-        """ send query """
+        """ coro: send query """
         if query in self.qry_cmds:
-            await self._send_command(self.qry_cmds[query])
+            await self.send_command(self.qry_cmds[query])
 
     def evaluate_rx_message(self, rx_cmd_, rx_param_):
         """ evaluate incoming command for required action or errors """
@@ -94,7 +95,7 @@ class DfpMini:
             raise Exception('DFPlayer error: SD-card removed!')
 
     async def consume_rx_data(self):
-        """ get and evaluate received bytearray """
+        """ coro: get and evaluate received bytearray """
         while True:
             await self.rx_queue.is_data.wait()
             ba_ = await self.rx_queue.get()
@@ -107,7 +108,7 @@ class DfpMini:
         """ coro: reset the DFPlayer
             - with SD card response should be: 0x3f 0x0002
         """
-        await self._send_command(0x0c, 0)
+        await self.send_command(0x0c, 0)
         await asyncio.sleep_ms(2000)  # allow time for the DFPlayer reset
         if self.rx_cmd != 0x3f:
             if self.rx_cmd == 0x41:
@@ -119,28 +120,28 @@ class DfpMini:
 
     async def play_track(self, track):
         """ coro: play track n """
-        await self._send_command(0x03, track)
+        await self.send_command(0x03, track)
         self.track_end_ev.clear()
         self.track = track
 
     async def play(self):
         """ coro: resume/start playing """
-        await self._send_command(0x0d, 0)
+        await self.send_command(0x0d, 0)
 
     async def pause(self):
-        """ pause/stop playing """
-        await self._send_command(0x0e, 0)
+        """ coro: pause/stop playing """
+        await self.send_command(0x0e, 0)
 
     async def set_vol(self, value):
         """ set volume VOL_MIN - VOL_MAX """
         if not 0 <= value <= self.VOL_MAX:
             value = self.VOL_MAX // 2
-        await self._send_command(0x06, value)
+        await self.send_command(0x06, value)
         return value
 
     async def set_eq(self, value):
         """ set eq by int value """
-        if value not in self.eq_val_str:
+        if value not in self.eq_set:
             value = 0
-        await self._send_command(0x07, value)
+        await self.send_command(0x07, value)
         return value

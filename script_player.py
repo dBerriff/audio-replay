@@ -52,9 +52,9 @@ async def run_commands(player_, commands_):
             elif cmd_ == 'trk':
                 await player_.play_trk_list(params)
             elif cmd_ == 'nxt':
-                await player_.next_track()
+                await player_.play_next_track()
             elif cmd_ == 'prv':
-                await player_.prev_track()
+                await player_.play_prev_track()
             elif cmd_ == 'rst':
                 await player_.reset()
             elif cmd_ == 'vol':

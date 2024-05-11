@@ -97,7 +97,7 @@ class CommandHandler:
 
     def get_checksum(self):
         # 2's complement checksum of bytes 1 to 6
-        return hex_f.slice_reg16(-sum(self.tx_word[1:7]))
+        return hex_f.slice_u16(-sum(self.tx_word[1:7]))
 
     def check_checksum(self, buf_):
         """ returns 0 if consistent checksum """
@@ -116,7 +116,7 @@ class CommandHandler:
         self.tx_word[self.CMD] = cmd
         # slice msb and lsb for parameter and checksum
         self.tx_word[self.P_M], self.tx_word[self.P_L] = \
-            hex_f.slice_reg16(param)
+            hex_f.slice_u16(param)
         self.tx_word[self.C_M], self.tx_word[self.C_L] = \
             self.get_checksum()
         # play track
@@ -138,7 +138,7 @@ class CommandHandler:
             if self.check_checksum(message_):
                 print(f'{rx_cmd}: error in checksum')
                 return
-            rx_param = hex_f.m_l_reg16(
+            rx_param = hex_f.m_l_u16(
                 message_[self.P_M], message_[self.P_L])
 
             # check for specific messages that require action

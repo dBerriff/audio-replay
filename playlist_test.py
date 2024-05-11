@@ -3,23 +3,15 @@
 
 import asyncio
 from dfp_support import LedFlash
-from data_link import DataLink
 from dfp_mini import DfpMini
 from playlist_player import PlPlayer
-from uqueue import Buffer
 
 
 async def main():
     """ test playlist player controller """
 
-    async def keep_alive():
-        """ keep-alive loop """
-        for _ in range(60):
-            await asyncio.sleep_ms(1_000)
-
     def build_player(tx_p, rx_p, btn_pins_):
         """ build player from components """
-        data_link = DataLink(tx_p, rx_p, 9600, 10, Buffer(), Buffer())
         cmd_handler = DfpMini(tx_p, rx_p)
         return PlPlayer(cmd_handler, btn_pins_)
 
@@ -35,7 +27,7 @@ async def main():
     asyncio.create_task(adc.poll_input())
 
     # play_pin, v_dec_pin, v_inc_pin
-    btn_pins = (20, 21, 22)
+    btn_pins = {"play": 20, "v_dec": 21, "v_inc": 22}
 
     player = build_player(tx_pin, rx_pin, btn_pins)
     print(f'Player name: {player.name}')

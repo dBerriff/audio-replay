@@ -58,9 +58,9 @@ class LedFlash:
 
 class ConfigFile:
     """ write and read json config files """
-    def __init__(self, filename, default):
+    def __init__(self, filename, default_params):
         self.filename = filename
-        self.default = default
+        self.default = default_params
 
     def write_cf(self, data):
         """ write config file as json dict """
@@ -93,5 +93,8 @@ def shuffle(list_):
     limit = n - 1
     for i in range(limit):  # exclusive range
         j = randint(i, limit)  # inclusive range
-        list_[i], list_[j] = list_[j], list_[i]
+        # list[j], list[i] = list[i], list[j]
+        t = list[j]
+        list[j] = list[i]
+        list[i] = t
     return list_

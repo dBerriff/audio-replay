@@ -12,6 +12,7 @@ from buttons import Button, HoldButton
 
 class PlPlayer(DfPlayer):
     """ play tracks in a playlist
+        - cmd_handler: example: DfpMini
         - playlist interface: index tracks from 1 to match DFPlayer
     """
     

@@ -18,7 +18,7 @@ class Buffer:
 
     async def put(self, item):
         """ coro: add item to buffer
-            - Lock() supports multiple producers
+            - put_lock supports multiple producers
         """
         async with self.put_lock:
             await self.is_space.wait()
@@ -28,13 +28,22 @@ class Buffer:
 
     async def get(self):
         """ coro: remove item from buffer
-            - assumes single consumer
+            - get_lock supports multiple consumers
+                -- not tested
         """
         async with self.get_lock:
             await self.is_data.wait()
             self.is_space.set()
             self.is_data.clear()
             return self._item
+
+    @property
+    def q_len(self):
+        """ number of items in the buffer to match queue interface """
+        if self.is_data.is_set():
+            return 1
+        else:
+            return 0
 
 
 class Queue(Buffer):
