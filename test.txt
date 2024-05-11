@@ -1,4 +1,5 @@
 # test commands for script_player.py
+# sound files: bbc.co.uk – © copyright [2014] BBC
 vol 5
 trk 79
 trk 76, 9,  25

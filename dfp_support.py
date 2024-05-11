@@ -93,8 +93,8 @@ def shuffle(list_):
     limit = n - 1
     for i in range(limit):  # exclusive range
         j = randint(i, limit)  # inclusive range
-        # list[j], list[i] = list[i], list[j]
-        t = list[j]
-        list[j] = list[i]
-        list[i] = t
+        # list_[j], list_[i] = list_[i], list_[j]
+        t = list_[j]
+        list_[j] = list_[i]
+        list_[i] = t
     return list_

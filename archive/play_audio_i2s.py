@@ -92,7 +92,7 @@ class Button:
     
     # debounce values
     n_checks = 3
-    i_max = n_checks - 1  # max list index
+    i_max = n_checks - 1  # max list track_index
     check_pause = 0.02  # around 20ms for typical de-bounce
 
     def __init__(self, pin):

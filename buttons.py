@@ -1,7 +1,7 @@
 # buttons.py
 
 import asyncio
-from machine import Pin
+from machine import Pin, Signal
 from micropython import const
 from time import ticks_ms, ticks_diff
 
@@ -28,7 +28,9 @@ class Button:
         self.prev_state = self.WAIT
         self.active_states = (self.CLICK,)
         self.press_ev = asyncio.Event()
+        self.enable_ev = asyncio.Event()
         self.press_ev.clear()
+        self.enable_ev.clear()
 
     def get_state(self):
         """ check for button click state """
@@ -43,16 +45,20 @@ class Button:
         """ poll self for press event
             - button state must be cleared by event handler
         """
+        self.enable_ev.set()
         while True:
+            await self.enable_ev.wait()
             self.state = self.get_state()
             if self.state in self.active_states:
                 self.press_ev.set()
+                self.enable_ev.clear()
             await asyncio.sleep_ms(self.POLL_INTERVAL)
 
     def clear_state(self):
         """ set state to 0 """
         self.state = self.WAIT
         self.press_ev.clear()
+        self.enable_ev.set()
 
 
 class HoldButton(Button):
@@ -81,3 +87,27 @@ class HoldButton(Button):
                 else:
                     return self.HOLD
         return self.WAIT
+
+
+async def main():
+    """ test DFPlayer controller """
+    btn = Button(18, "play")
+    print(btn.name)
+    asyncio.create_task(btn.poll_state())
+    i = 0
+    while True:
+        await btn.press_ev.wait()
+        i += 1
+        print(i, btn.state)
+        print('Blocked')
+        await asyncio.sleep_ms(5_000)
+        btn.clear_state()
+        print('Clear')
+
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    finally:
+        asyncio.new_event_loop()  # clear retained state
+        print('execution complete')

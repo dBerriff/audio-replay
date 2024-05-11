@@ -39,7 +39,7 @@ class CommandHandler:
     C_L = const(8)
 
     R_FB = const(1)  # require ACK feedback
-    # fixed bytearray elements by index
+    # fixed bytearray elements by track_index
     data_template = {0: 0x7E, 1: 0xFF, 2: 0x06, 4: R_FB, 9: 0xEF}
     
     # selective command dictionary

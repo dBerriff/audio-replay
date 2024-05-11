@@ -14,7 +14,7 @@ class DfPlayer:
     """
 
     START_TRACK = const(1)
-    VOL_MAX = const(10)
+    VOL_SCALE = const(10)
     default_config = {'vol': 3, 'eq': 'bass'}
 
     def __init__(self, cmd_handler_):
@@ -22,12 +22,13 @@ class DfPlayer:
         self.cf = ConfigFile('config.json', self.default_config)
         self.name = cmd_handler_.NAME
         self.config = self.cf.read_cf()
-        self.vol_factor = cmd_handler_.VOL_FACTOR
+        self.cmd_vol_max = cmd_handler_.VOL_MAX
         self.vol = self.config['vol']
         self.eq = self.config['eq']
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
-        self._track_index = 1
+        self.track_index = self.START_TRACK
+        self.track_count = 0
         self.track_end_ev = self.cmd_handler.track_end_ev
         self.track_end_ev.set()  # no track playing yet
 
@@ -54,14 +55,16 @@ class DfPlayer:
 
     async def play_track_after(self, track):
         """ play track after current track finishes """
+        print('df_player waiting to play track after...')
         await self.cmd_handler.track_end_ev.wait()
+        print('df_player waiting done.')
         await self.play_track(track)
 
     async def set_vol(self, level_):
         """ set volume level """
         if level_ != self.vol:
-            self.vol = await self.cmd_handler.set_vol(
-                level_ * self.vol_factor) // self.vol_factor
+            level = level_ * self.cmd_vol_max // self.VOL_SCALE
+            self.vol = await self.cmd_handler.set_vol(level)
             self.config['vol'] = self.vol
 
     async def dec_vol(self):
@@ -107,14 +110,14 @@ class DfPlayer:
 
     async def play_next_track(self):
         """ coro: play next track """
-        self._track_index += 1
-        if self._track_index > self.cmd_handler.track_count:
-            self._track_index = self.START_TRACK
-        await self.play_track_after(self._track_index)
+        self.track_index += 1
+        if self.track_index > self.cmd_handler.track_count:
+            self.track_index = self.START_TRACK
+        await self.play_track_after(self.track_index)
 
     async def play_prev_track(self):
         """ coro: play previous track """
-        self._track_index -= 1
-        if self._track_index < self.START_TRACK:
-            self._track_index = self.cmd_handler.track_count
-        await self.play_track_after(self._track_index)
+        self.track_index -= 1
+        if self.track_index < self.START_TRACK:
+            self.track_index = self.cmd_handler.track_count
+        await self.play_track_after(self.track_index)

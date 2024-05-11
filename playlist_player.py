@@ -13,17 +13,16 @@ from buttons import Button, HoldButton
 class PlPlayer(DfPlayer):
     """ play tracks in a playlist
         - cmd_handler: example: DfpMini
-        - playlist interface: index tracks from 1 to match DFPlayer
+        - playlist interface: track_index tracks from 1 to match DFPlayer
     """
-    
-    START_TRACK = 1
 
     def __init__(self, cmd_handler, btn_pins_):
         super().__init__(cmd_handler)
-        self.buttons = DfpButtons(self, *btn_pins_)
+        self.buttons = DfpButtons(self, btn_pins_)
         self._playlist = []
         self._track_count = 0
-        self._index = self.START_TRACK
+        self.track_index = self.START_TRACK
+        self.list_index = 0
         self.led = Led('LED')
         asyncio.create_task(self.buttons.poll_buttons())
     
@@ -34,27 +33,31 @@ class PlPlayer(DfPlayer):
     def build_playlist(self, shuffled=False):
         """ shuffle playlist track sequence """
         self._track_count = self.cmd_handler.track_count
-        self._playlist = [i + 1 for i in range(self._track_count)]
+        playlist = []
+        for i in range(self._track_count):
+            playlist.append(i + 1)
+        self._playlist = playlist
+        print(self._track_count)
         if shuffled:
             self._playlist = shuffle(self._playlist)
-        self._playlist.insert(0, 0)
+        print(self._playlist)
 
-    async def play_pl_track(self, track_index_):
-        """ play playlist track by index """
-        self._index = track_index_
-        await self.play_track_after(self._playlist[track_index_])
-        print(f"Playing track: {self._index}")
+    async def play_pl_track(self, list_index_):
+        """ play playlist track by list track_index """
+        self.track_index = self._playlist[list_index_]
+        await self.play_track(self.track_index)
 
     async def next_pl_track(self):
-        """ coro: play next track """
-        self._index += 1
-        if self._index > self._track_count:
-            self._index = self.START_TRACK
-        await self.play_pl_track(self._index)
+        """ coro: play next track by list track_index """
+        self.list_index += 1
+        if self.list_index == self._track_count:
+            self.list_index = 0
+        self.track_index = self._playlist[self.list_index]
+        await self.play_track(self.track_index)
 
     async def play_playlist(self):
         """ play playlist """
-        await self.play_pl_track(self.START_TRACK)
+        await self.play_pl_track(0)
         while True:
             await self.next_pl_track()
 
@@ -67,29 +70,34 @@ class PlPlayer(DfPlayer):
 
     async def inc_vol(self):
         """ increment volume by 1 unit and blink value """
-        if self.vol < self.VOL_MAX:
+        if self.vol < self.VOL_SCALE:
             vol = self.vol + 1
             await self.set_vol(vol)
             asyncio.create_task(self.led.blink(vol))
 
 
 class DfpButtons:
-    """ player buttons """
+    """
+        player buttons
+        - play_btn waits for any current track-play to complete
+    """
 
-    def __init__(self, player_, play_pin, v_dec_pin, v_inc_pin):
+    def __init__(self, player_, buttons_):
         self.player = player_
-        self.play_btn = Button(play_pin)
-        self.v_dec_btn = HoldButton(v_dec_pin)
-        self.v_inc_btn = HoldButton(v_inc_pin)
+        self.play_btn = Button(buttons_["play"])
+        self.v_dec_btn = HoldButton(buttons_["v_dec"])
+        self.v_inc_btn = HoldButton(buttons_["v_inc"])
         self.led = Led('LED')
 
     async def play_btn_pressed(self):
         """ play next playlist track """
         button = self.play_btn
+        self.player.list_index = -1
         while True:
             await button.press_ev.wait()
             await self.player.next_pl_track()
-            button.press_ev.clear()
+            await self.player.cmd_handler.track_end_ev.wait()
+            button.clear_state()
 
     async def dec_btn_pressed(self):
         """ decrement player volume setting """
@@ -125,18 +133,3 @@ class DfpButtons:
         asyncio.create_task(self.play_btn_pressed())
         asyncio.create_task(self.dec_btn_pressed())
         asyncio.create_task(self.inc_btn_pressed())
-
-
-async def main():
-    """ test playlist player controller
-        - playlist interface indexes tracks from 1
-    """
-    print('In main()')
-
-
-if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    finally:
-        asyncio.new_event_loop()  # clear retained state
-        print('execution complete')

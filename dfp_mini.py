@@ -7,8 +7,7 @@
 
 import asyncio
 from dfpm_codec import MiniCmdPackUnpack
-from uqueue import Buffer
-from data_link import DataLink
+from data_link import Buffer, DataLink
 
 
 class DfpMini:
@@ -28,7 +27,6 @@ class DfpMini:
 
     NAME = const('DFPlayer Mini')
     VOL_MAX = const(30)
-    VOL_FACTOR = const(VOL_MAX // 10)  # normalise to 0-10 range
     CONFIG_FILENAME = const('config.json')
 
     # eq dictionary for decoding eq query response
