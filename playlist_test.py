@@ -21,7 +21,6 @@ async def main():
     adc = LedFlash(adc_pin, led_pin)
     asyncio.create_task(adc.poll_input())
 
-    # play_pin, v_dec_pin, v_inc_pin
     btn_pins = {"play": 20, "v_dec": 21, "v_inc": 22}
     player = PlPlayer(DfpMini(tx_p, rx_p), btn_pins)
     print(f'Player name: {player.name}')
