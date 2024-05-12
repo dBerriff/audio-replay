@@ -63,7 +63,7 @@ class PlPlayer(DfPlayer):
 
     async def dec_vol(self):
         """ decrement volume by 1 unit and blink value """
-        if self.vol > 0:
+        if self.vol > 1:
             vol = self.vol - 1
             await self.set_vol(vol)
             asyncio.create_task(self.led.blink(vol))
