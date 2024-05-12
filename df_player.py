@@ -14,16 +14,17 @@ class DfPlayer:
     """
 
     START_TRACK = const(1)
-    VOL_SCALE = const(10)
-    default_config = {'vol': 3, 'eq': 'bass'}
+    # change to LEVEL_SCALE
+    LEVEL_SCALE = const(10)
+    default_config = {'level': 3, 'eq': 'bass'}
 
     def __init__(self, cmd_handler_):
         self.cmd_handler = cmd_handler_
         self.cf = ConfigFile('config.json', self.default_config)
         self.name = cmd_handler_.NAME
         self.config = self.cf.read_cf()
-        self.cmd_vol_max = cmd_handler_.VOL_MAX
-        self.vol = self.config['vol']
+        self.vol_factor = cmd_handler_.VOL_MAX // self.LEVEL_SCALE
+        self.level = self.config['level']
         self.eq = self.config['eq']
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
@@ -60,24 +61,13 @@ class DfPlayer:
         print('df_player waiting done.')
         await self.play_track(track)
 
-    async def set_vol(self, level_):
-        """ set volume level """
-        if level_ != self.vol:
-            level = level_ * self.cmd_vol_max // self.VOL_SCALE
-            self.vol = await self.cmd_handler.set_vol(level)
-            self.config['vol'] = self.vol
-
-    async def dec_vol(self):
-        """ decrement volume by 1 unit """
-        if self.vol > 0:
-            self.vol -= 1
-            await self.set_vol(self.vol)
-
-    async def inc_vol(self):
-        """ increment volume by 1 unit """
-        if self.vol < self.VOL_MAX:
-            self.vol += 1
-            await self.set_vol(self.vol)
+    async def set_level(self, level_):
+        """ set audio output level  """
+        if level_ != self.level:
+            vol = level_ * self.vol_factor
+            await self.cmd_handler.set_vol(vol)
+            self.level = level_
+            self.config['level'] = level_
 
     async def set_eq(self, eq_name):
         """ set eq by type str """
