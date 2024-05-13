@@ -16,8 +16,8 @@ class ScriptPlayer(DfPlayer):
 
     cmd_set = {'zzz', 'trk', 'nxt', 'prv', 'rst', 'vol', 'stp', 'ply'}
 
-    def __init__(self, cmd_handler, commands=[]):
-        super().__init__(cmd_handler)
+    def __init__(self, hw_player, commands=[]):
+        super().__init__(hw_player)
         self.commands = commands
         self.led = Led('LED')
 
@@ -36,7 +36,7 @@ class ScriptPlayer(DfPlayer):
             - format is: 'cmd p0 p1 ...' or 'cmd, p0, p1, ...'
         """
         for command in self.commands:
-            await self.cmd_handler.track_end_ev.wait()
+            await self.hw_player.track_end_ev.wait()
             cmd_, params = command
             if cmd_ in self.cmd_set:
                 print(cmd_, params)
@@ -52,11 +52,11 @@ class ScriptPlayer(DfPlayer):
                 elif cmd_ == 'rst':
                     await self.reset()
                 elif cmd_ == 'vol':
-                    await self.set_vol(params[0])
+                    await self.set_level(params[0])
                 elif cmd_ == 'stp':
-                    await self.cmd_handler.pause()
+                    await self.hw_player.pause()
                 elif cmd_ == 'ply':
-                    await self.cmd_handler.ch_play()
+                    await self.hw_player.ch_play()
 
     @staticmethod
     def parse_command(cmd_line):

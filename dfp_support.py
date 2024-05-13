@@ -17,8 +17,8 @@ class Led:
         self.led.off()
         self.blink_lock = asyncio.Lock()
 
-    async def flash(self, ms_):
-        """ coro: flash the LED """
+    async def show(self, ms_):
+        """ coro: light the LED for ms_ """
         self.led.on()
         await asyncio.sleep_ms(ms_)
         self.led.off()
@@ -53,7 +53,7 @@ class LedFlash:
             await asyncio.sleep_ms(100)
             level_ = self.adc.read_u16()
             if level_ > ref_u16:
-                asyncio.create_task(self.led.flash(min((level_ - ref_u16), 200)))
+                asyncio.create_task(self.led.show(min((level_ - ref_u16), 200)))
 
 
 class ConfigFile:

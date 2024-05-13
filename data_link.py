@@ -13,6 +13,7 @@
 
 import asyncio
 from machine import Pin, UART
+import struct
 
 
 class StreamTR:

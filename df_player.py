@@ -3,6 +3,7 @@
 
 import asyncio
 from dfp_support import ConfigFile
+from dfp_mini import DfpMini
 
 
 class DfPlayer:
@@ -13,33 +14,30 @@ class DfPlayer:
         - volume is set in range 0 - 10 and scaled
     """
 
-    START_TRACK = const(1)
-    # change to LEVEL_SCALE
     LEVEL_SCALE = const(10)
     default_config = {'level': 3, 'eq': 'bass'}
 
-    def __init__(self, cmd_handler_):
-        self.cmd_handler = cmd_handler_
+    def __init__(self, hw_player_):
+        self.hw_player = hw_player_
         self.cf = ConfigFile('config.json', self.default_config)
-        self.name = cmd_handler_.NAME
+        self.name = hw_player_.NAME
         self.config = self.cf.read_cf()
-        self.vol_factor = cmd_handler_.VOL_MAX // self.LEVEL_SCALE
+        self.vol_factor = hw_player_.VOL_MAX // self.LEVEL_SCALE
         self.level = self.config['level']
         self.eq = self.config['eq']
         self.rx_cmd = 0x00
         self.rx_param = 0x0000
-        self.track_index = self.START_TRACK
-        self.track_count = 0
-        self.track_end_ev = self.cmd_handler.track_end_ev
-        self.track_end_ev.set()  # no track playing yet
+        self.start_track = hw_player_.START_TRACK
+        self.track_index = self.start_track
+        hw_player_.track_end_ev.set()  # no track playing yet
 
     async def reset(self):
         """ reset player including track_count """
-        await self.cmd_handler.reset()
+        await self.hw_player.reset()
         await self.send_query('sd_files')
         await asyncio.sleep_ms(200)
-        self.vol = self.config['vol']
-        await self.set_vol(self.vol)
+        self.level = self.config['level']
+        await self.set_level(self.level)
         self.eq = self.config['eq']
         await self.set_eq(self.eq)
 
@@ -51,45 +49,47 @@ class DfPlayer:
 
     async def play_track(self, track):
         """ play track by number """
-        if self.START_TRACK <= track <= self.cmd_handler.track_count:
-            await self.cmd_handler.play_track(track)
+        if self.start_track <= track <= self.hw_player.track_count:
+            await self.hw_player.play_track(track)
 
     async def play_track_after(self, track):
         """ play track after current track finishes """
-        print('df_player waiting to play track after...')
-        await self.cmd_handler.track_end_ev.wait()
-        print('df_player waiting done.')
+        await self.hw_player.track_end_ev.wait()
         await self.play_track(track)
 
     async def set_level(self, level_):
         """ set audio output level  """
         if level_ != self.level:
-            vol = level_ * self.vol_factor
-            await self.cmd_handler.set_vol(vol)
-            self.level = level_
-            self.config['level'] = level_
+            if 0 < level_ <= self.LEVEL_SCALE:
+                vol = level_ * self.vol_factor
+
+                await self.hw_player.set_vol(vol)
+                self.level = level_
+                self.config['level'] = level_
 
     async def set_eq(self, eq_name):
         """ set eq by type str """
         if eq_name != self.eq:
-            eq_ = self.cmd_handler.eq_str_val[eq_name]
-            eq_ = await self.cmd_handler.set_eq(eq_)
-            self.eq = self.cmd_handler.eq_val_str[eq_]
+            eq_ = self.hw_player.eq_str_val[eq_name]
+            eq_ = await self.hw_player.set_eq(eq_)
+            self.eq = self.hw_player.eq_val_str[eq_]
             self.config['eq'] = self.eq
 
     async def send_query(self, query):
         """ send query and wait for response event
             - 'vol', 'eq', 'sd_files', 'sd_track' """
-        if query in self.cmd_handler.qry_cmds:
-            await self.cmd_handler.send_query(query)
+        if query in self.hw_player.qry_cmds:
+            await self.hw_player.send_query(query)
+            await self.hw_player.q_response_ev.wait()
             if query == 'vol':
-                print(f'Query vol: {self.cmd_handler.cf["vol"] // self.vol_factor}')
+                print(f'Query level: {self.hw_player.config["vol"] // self.vol_factor}')
             elif query == 'eq':
-                print(f'Query eq: {self.cmd_handler.cf["eq"]}')
+                print(f'Query eq: {self.hw_player.config["eq"]}')
             elif query == 'sd_files':
-                print(f'Query track count: {self.cmd_handler.track_count}')
+                print(f'Query track count: {self.hw_player.track_count}')
             elif query == 'sd_track':
-                print(f'Query current track: {self.cmd_handler.track}')
+                print(f'Query current track: {self.hw_player.track}')
+            self.hw_player.q_response_ev.clear()
 
     # playback methods
 
@@ -101,13 +101,41 @@ class DfPlayer:
     async def play_next_track(self):
         """ coro: play next track """
         self.track_index += 1
-        if self.track_index > self.cmd_handler.track_count:
-            self.track_index = self.START_TRACK
+        if self.track_index > self.hw_player.track_count:
+            self.track_index = self.start_track
         await self.play_track_after(self.track_index)
 
     async def play_prev_track(self):
         """ coro: play previous track """
         self.track_index -= 1
-        if self.track_index < self.START_TRACK:
-            self.track_index = self.cmd_handler.track_count
+        if self.track_index < self.start_track:
+            self.track_index = self.hw_player.track_count
         await self.play_track_after(self.track_index)
+
+
+async def main():
+    """ test DFPlayer controller """
+
+    # UART pins
+    tx_pin = 16
+    rx_pin = 17
+
+    player = DfpMini(tx_pin, rx_pin)
+    v_player = DfPlayer(player)
+    print("player.reset()")
+    await v_player.reset()
+    await v_player.set_level(3)
+    await v_player.send_query("vol")
+    await v_player.send_query("eq")
+    
+    print("player.play_track(1)")
+    await v_player.play_track_after(1)
+    print("player.play_track_after(2)")
+    await v_player.play_track_after(2)
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    finally:
+        asyncio.new_event_loop()  # clear retained state
+        print('execution complete')
