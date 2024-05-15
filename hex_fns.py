@@ -7,7 +7,7 @@ hex_digit = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 
 
 def byte_digits(b):
-    """ return 8-bit value as hex str """
+    """ return 8-bit value (truncated) as hex str """
     lsh = b & 0xf
     msh = b >> 4 & 0xf
     return hex_digit[msh] + hex_digit[lsh]
@@ -19,7 +19,7 @@ def byte_str(b):
 
 
 def slice_u16(value):
-    """ slice 16-bit register into msb and lsb bytes """
+    """ slice 16-bit register (truncated) into msb and lsb bytes """
     lsb = value & 0xff
     msb = value >> 8 & 0xff
     return msb, lsb
