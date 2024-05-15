@@ -1,10 +1,9 @@
 # test commands for script_player.py
-# sound files: bbc.co.uk – © copyright [2014] BBC
-vol 5
-trk 79
-trk 76, 9,  25
+# sound files: bbc.co.uk – © copyright 2014 BBC
+vol 3
+trk 3
 zzz 2
-trk 76,75
+trk 2
 zzz 2
 trk 1
 nxt

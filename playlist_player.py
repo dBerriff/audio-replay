@@ -5,6 +5,7 @@
 """
 
 import asyncio
+from dfp_mini import DfpMini
 from df_player import DfPlayer
 from dfp_support import shuffle, Led
 from buttons import Button, HoldButton
@@ -21,7 +22,7 @@ class PlPlayer(DfPlayer):
         self.buttons = DfpButtons(self, btn_pins_)
         self._playlist = []
         self._track_count = 0
-        self.track_index = self.START_TRACK
+        self.track_index = hw_player.START_TRACK
         self.list_index = 0
         self.led = Led('LED')
         asyncio.create_task(self.buttons.poll_buttons())
@@ -133,3 +134,36 @@ class DfpButtons:
         asyncio.create_task(self.play_btn_pressed())
         asyncio.create_task(self.dec_btn_pressed())
         asyncio.create_task(self.inc_btn_pressed())
+
+async def main():
+    """ test playlist player controller """
+
+    # pins
+    # UART
+    tx_pin = 16
+    rx_pin = 17
+    # ADC
+    # adc_pin = 26
+    # led_pin = 'LED'
+
+    # play_pin, v_dec_pin, v_inc_pin
+    button_pins = {"play": 18, "v_dec": 19, "v_inc": 20}
+
+    player = PlPlayer(DfpMini(tx_pin, rx_pin), button_pins)
+    led = Led('LED')
+    await player.reset()
+    player.build_playlist(shuffled=False)
+    print(f'Config: {player.config}')
+    asyncio.create_task(led.show(2000))
+    
+    while True:
+        await asyncio.sleep_ms(1000)
+
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    finally:
+        asyncio.new_event_loop()  # clear retained state
+        print('execution complete')
+    

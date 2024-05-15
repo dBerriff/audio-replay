@@ -5,8 +5,9 @@
 """
 
 import asyncio
+from dfp_mini import DfpMini
 from df_player import DfPlayer
-from dfp_support import Led, LedFlash
+from dfp_support import Led
 
 
 class ScriptPlayer(DfPlayer):
@@ -16,9 +17,9 @@ class ScriptPlayer(DfPlayer):
 
     cmd_set = {'zzz', 'trk', 'nxt', 'prv', 'rst', 'vol', 'stp', 'ply'}
 
-    def __init__(self, hw_player, commands=[]):
+    def __init__(self, hw_player):
         super().__init__(hw_player)
-        self.commands = commands
+        self.commands = None
         self.led = Led('LED')
 
     def read_command_file(self, filename):
@@ -41,7 +42,7 @@ class ScriptPlayer(DfPlayer):
             if cmd_ in self.cmd_set:
                 print(cmd_, params)
                 if cmd_ == 'zzz':
-                    await self.track_end_ev.wait()
+                    await self.hw_player.track_end_ev.wait()
                     await asyncio.sleep(params[0])
                 elif cmd_ == 'trk':
                     await self.play_trk_list(params)
@@ -78,3 +79,26 @@ class ScriptPlayer(DfPlayer):
         return cmd_, params
 
 
+async def main():
+    """ test DFPlayer controller """
+
+    # UART pins
+    tx_pin = 16
+    rx_pin = 17
+
+    player = ScriptPlayer(DfpMini(tx_pin, rx_pin))
+    player.read_command_file("test.txt")
+    print(f'Player name: {player.name}')
+    await player.reset()
+    print(f"Level (1-10): {player.level} Eq: {player.eq}")
+    print('Run commands')
+    # player.read_command_file('test.txt')
+    await player.run_commands()
+
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    finally:
+        asyncio.new_event_loop()  # clear retained state
+        print('execution complete')

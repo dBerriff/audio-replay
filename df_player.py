@@ -9,9 +9,11 @@ from dfp_mini import DfpMini
 class DfPlayer:
     """
         implement high-level control of audio track player
-            device-specific module: dfp_mini.py
+            - devices
+                -- dfp_mini - serial commands over UART
+                -- ??? - serial AT commands (module not yet written)
         - tracks are referenced by number, counting from 1
-        - volume is set in range 0 - 10 and scaled
+        - volume is set from 0...10 and scaled to device range
     """
 
     LEVEL_SCALE = const(10)
@@ -49,23 +51,21 @@ class DfPlayer:
 
     async def play_track(self, track):
         """ play track by number """
-        if self.start_track <= track <= self.hw_player.track_count:
-            await self.hw_player.play_track(track)
+        await self.hw_player.play_track(track)
 
     async def play_track_after(self, track):
         """ play track after current track finishes """
         await self.hw_player.track_end_ev.wait()
-        await self.play_track(track)
+        await self.hw_player.play_track(track)
 
     async def set_level(self, level_):
         """ set audio output level  """
         if level_ != self.level:
-            if 0 < level_ <= self.LEVEL_SCALE:
-                vol = level_ * self.vol_factor
-
-                await self.hw_player.set_vol(vol)
-                self.level = level_
-                self.config['level'] = level_
+            level_ = max(level_, 0)
+            level_ = min(level_, self.LEVEL_SCALE)
+            await self.hw_player.set_vol(level_ * self.vol_factor)
+            self.level = level_
+            self.config['level'] = level_
 
     async def set_eq(self, eq_name):
         """ set eq by type str """
@@ -127,11 +127,13 @@ async def main():
     await v_player.set_level(3)
     await v_player.send_query("vol")
     await v_player.send_query("eq")
-    
-    print("player.play_track(1)")
-    await v_player.play_track_after(1)
-    print("player.play_track_after(2)")
-    await v_player.play_track_after(2)
+
+    tracks = player.track_count
+    print(f"Track count: {tracks}")
+    for i in range(tracks):
+        track = i + 1
+        print(f"player.play_track({track})")
+        await v_player.play_track_after(track)
 
 if __name__ == '__main__':
     try:
