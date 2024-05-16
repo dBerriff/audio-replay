@@ -13,7 +13,6 @@
 
 import asyncio
 from machine import Pin, UART
-import struct
 
 
 class StreamTR:
@@ -24,6 +23,7 @@ class StreamTR:
         self.buf_size = buf_size  # length of bytearray
         self.tx_queue = tx_queue
         self.rx_queue = rx_queue
+        # aliases - parameters 'loop' and 'reader' magically supplied
         self.s_writer = asyncio.StreamWriter(self.stream, {})
         self.s_reader = asyncio.StreamReader(self.stream)
         self.in_buf = bytearray(buf_size)

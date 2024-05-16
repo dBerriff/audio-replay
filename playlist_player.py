@@ -135,6 +135,7 @@ class DfpButtons:
         asyncio.create_task(self.dec_btn_pressed())
         asyncio.create_task(self.inc_btn_pressed())
 
+
 async def main():
     """ test playlist player controller """
 
