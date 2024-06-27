@@ -1,5 +1,5 @@
 # test commands for script_player.py
-# sound files: bbc.co.uk – © copyright 2014 BBC
+# sound files: bbc.co.uk – © copyright 2024 BBC
 vol 3
 trk 3
 zzz 2
