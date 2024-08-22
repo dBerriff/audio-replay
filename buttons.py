@@ -91,7 +91,7 @@ class HoldButton(Button):
 
 async def main():
     """ test DFPlayer controller """
-    btn = Button(18, "play")
+    btn = Button(4, "play")
     print(btn.name)
     asyncio.create_task(btn.poll_state())
     i = 0

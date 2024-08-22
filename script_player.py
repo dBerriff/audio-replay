@@ -7,7 +7,7 @@
 import asyncio
 from dfp_mini import DfpMini
 from df_player import DfPlayer
-from dfp_support import Led
+from led import Led
 
 
 class ScriptPlayer(DfPlayer):
@@ -87,8 +87,9 @@ async def main():
     rx_pin = 17
 
     player = ScriptPlayer(DfpMini(tx_pin, rx_pin))
-    player.read_command_file("test.txt")
     print(f'Player name: {player.name}')
+    player.read_command_file("test.txt")
+    print(player.commands)
     await player.reset()
     print(f"Level (1-10): {player.level} Eq: {player.eq}")
     print('Run commands')

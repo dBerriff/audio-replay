@@ -5,9 +5,10 @@
 """
 
 import asyncio
+from random import randint
 from dfp_mini import DfpMini
 from df_player import DfPlayer
-from dfp_support import shuffle, Led
+from led import Led
 from buttons import Button, HoldButton
 
 
@@ -25,6 +26,7 @@ class PlPlayer(DfPlayer):
         self.track_index = hw_player.START_TRACK
         self.list_index = 0
         self.led = Led('LED')
+        self.ch_l_lock = asyncio.Lock()
         asyncio.create_task(self.buttons.poll_buttons())
     
     @property
@@ -40,7 +42,7 @@ class PlPlayer(DfPlayer):
         self._playlist = playlist
         print(self._track_count)
         if shuffled:
-            self._playlist = shuffle(self._playlist)
+            self._playlist = self.shuffle(self._playlist)
         print(self._playlist)
 
     async def play_pl_track(self, list_index_):
@@ -64,17 +66,37 @@ class PlPlayer(DfPlayer):
 
     async def dec_level(self):
         """ decrement volume by 1 unit and blink value """
-        if self.level > 1:
-            level = self.level - 1
-            await self.set_level(level)
-            asyncio.create_task(self.led.blink(level))
+        async with self.ch_l_lock:
+            if self.level > 1:
+                level = self.level - 1
+                await self.set_level(level)
+                print(f"Output level: {level}")
+                await self.led.blink(level)
 
     async def inc_level(self):
         """ increment volume by 1 unit and blink value """
-        if self.level < self.LEVEL_SCALE:
-            level = self.level + 1
-            await self.set_level(level)
-            asyncio.create_task(self.led.blink(level))
+        async with self.ch_l_lock:
+            if self.level < self.LEVEL_SCALE:
+                level = self.level + 1
+                await self.set_level(level)
+                print(f"Output level: {level}")
+                await self.led.blink(level)
+
+    @staticmethod
+    def shuffle(list_):
+        """ return a shuffled list
+            - Durstenfeld / Fisher-Yates shuffle algorithm """
+        n = len(list_)
+        if n < 2:
+            return list_
+        limit = n - 1
+        for i in range(limit):  # exclusive range
+            j = randint(i, limit)  # inclusive range
+            # list_[j], list_[i] = list_[i], list_[j]
+            t = list_[j]
+            list_[j] = list_[i]
+            list_[i] = t
+        return list_
 
 
 class DfpButtons:
@@ -140,15 +162,15 @@ async def main():
     """ test playlist player controller """
 
     # pins
-    # UART
+    # - UART
     tx_pin = 16
     rx_pin = 17
-    # ADC
+    # - ADC
     # adc_pin = 26
     # led_pin = 'LED'
 
     # play_pin, v_dec_pin, v_inc_pin
-    button_pins = {"play": 18, "v_dec": 19, "v_inc": 20}
+    button_pins = {"play": 2, "v_dec": 3, "v_inc": 4}
 
     player = PlPlayer(DfpMini(tx_pin, rx_pin), button_pins)
     led = Led('LED')

@@ -2,7 +2,9 @@
 """ Control DFPlayer Mini over UART """
 
 import asyncio
-from dfp_support import ConfigFile
+import json
+import os
+
 from dfp_mini import DfpMini
 
 
@@ -11,7 +13,7 @@ class DfPlayer:
         implement high-level control of audio track player
             - devices
                 -- dfp_mini - serial commands over UART
-                -- ??? - serial AT commands (module not yet written)
+                -- ??? - serial AT commands (future module)
         - tracks are referenced by number, counting from 1
         - volume is set from 0...10 and scaled to device range
     """
@@ -111,6 +113,34 @@ class DfPlayer:
         if self.track_index < self.start_track:
             self.track_index = self.hw_player.track_count
         await self.play_track_after(self.track_index)
+
+
+class ConfigFile:
+    """ write and read json config files """
+    def __init__(self, filename, default_params):
+        self.filename = filename
+        self.default = default_params
+
+    def write_cf(self, data):
+        """ write config file as json dict """
+        with open(self.filename, 'w') as f:
+            json.dump(data, f)
+
+    def read_cf(self):
+        """ return config data dict from file
+            - calling code checks is_config() """
+        if self.is_file(self.filename):
+            with open(self.filename, 'r') as f:
+                data = json.load(f)
+        else:
+            data = self.default
+            self.write_cf(data)
+        return data
+
+    @staticmethod
+    def is_file(f):
+        """ check if config file exists """
+        return f in os.listdir()
 
 
 async def main():
