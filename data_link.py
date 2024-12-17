@@ -145,3 +145,10 @@ class Queue(Buffer):
         else:
             n = (self.next - self.head) % self.length
         return n
+
+def main():
+    pass
+
+
+if __name__ == '__main__':
+    main()
