@@ -48,15 +48,3 @@ class LedFlash:
             level_ = self.adc.read_u16()
             if level_ > ref_u16:
                 asyncio.create_task(self.led.show(min((level_ - ref_u16), 200)))
-
-async def main():
-    l = Led('LED')
-    await l.blink(10)
-
-
-if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    finally:
-        asyncio.new_event_loop()  # clear retained state
-        print('execution complete')
